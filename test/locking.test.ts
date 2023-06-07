@@ -38,7 +38,7 @@ describe("locking", () => {
 
       await locking.methods.createLock(await mockToken.amount(amount), durationSeconds).send({ from: user });
       expect(await locking.methods.getPower(user).call())
-        .bignumber.eq(power * 1e18)
+        .bignumber.eq(power * 1e18) // TODO broken
         .eq(amount * 3 * 1e18);
     });
 
@@ -69,17 +69,17 @@ describe("locking", () => {
         name: "24 months",
       },
     ].map((t) => {
-      it.only(`calcPower: ${t.name}`, async () => {
-        // expect(await locking.methods.calcPower(t).call()).bignumber.eq(amount * 2.7 * 1e18);
+      it(`calcPower: ${t.name}`, async () => {
         expect(await locking.methods.calcPower(t.remaining).call()).bignumber.eq(t.power);
         console.log(await locking.methods.calcPower(t.remaining).estimateGas());
       });
     });
 
-    it("power by months locked remaining", async () => {
-      // const durationSeconds = 3 * MONTH;
-      // await locking.methods.createLock(await mockToken.amount(amount), durationSeconds).send({ from: user });
-      // await mineBlock(7 * DAY);
+    it("power by months remaining", async () => {
+      const durationSeconds = 3 * MONTH;
+      await locking.methods.createLock(await mockToken.amount(amount), durationSeconds).send({ from: user });
+      // TODO
+      await mineBlock(7 * DAY);
     });
   });
 });

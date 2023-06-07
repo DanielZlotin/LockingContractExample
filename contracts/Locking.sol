@@ -30,11 +30,13 @@ contract Locking {
         deadline = locks[target].deadline;
     }
 
-    // uint256 remainingSeconds = locks[target].deadline - block.timestamp;
+    function getPower(address target) external view returns (uint256 power) {
+        return calcPower(locks[target].deadline - block.timestamp);
+    }
 
-    function calcPower(uint256 remainingSeconds) external pure returns (uint256 power) {
+    function calcPower(uint256 remainingSeconds) public pure returns (uint256 power) {
         int128 factor = ABDKMath64x64.divu(SLOPE, BASE);
-        int128 months = ABDKMath64x64.divu(remainingSeconds, 30 days);
+        int128 months = ABDKMath64x64.divu(remainingSeconds, 30 days); // TODO this ratio has no meaning
         power = months.log_2().mul(factor).exp_2().mulu(BASE);
     }
 }
