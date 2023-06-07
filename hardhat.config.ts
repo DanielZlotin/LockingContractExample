@@ -14,6 +14,6 @@ export default _.merge(hardhatDefaultConfig(), {
     hardhat: {},
   },
   mocha: {
-    bail: true,
+    bail: false,
   },
 } as HardhatUserConfig);
