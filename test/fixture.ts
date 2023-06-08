@@ -6,6 +6,8 @@ import BN from "bignumber.js";
 
 export let deployer: string;
 export let user: string;
+export let feeReceiver1: string;
+export let feeReceiver2: string;
 
 export let mockToken: MockERC20 & Token;
 export let locking: Locking;
@@ -17,11 +19,15 @@ export const MONTH = DAY * 30;
 export async function withFixture() {
   deployer = await account(9);
   user = await account(0);
+  feeReceiver1 = await account(1);
+  feeReceiver2 = await account(2);
   tag(user, "user");
   tag(deployer, "deployer");
+  tag(feeReceiver1, "feeReceiver1");
+  tag(feeReceiver2, "feeReceiver2");
 
   mockToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9)])).options.address);
-  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address, 12_000]);
+  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address, 12000, 9000, feeReceiver1, feeReceiver2]);
 
   expect(await locking.methods.token().call()).eq(mockToken.options.address);
 }
