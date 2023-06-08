@@ -1,7 +1,7 @@
 import { block, bn18 } from "@defi.org/web3-candies";
-import { mineBlock, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
+import { deploy, expectRevert, mineBlock, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
-import { DAY, MONTH, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
+import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
 
 useChaiBigNumber();
 
@@ -102,7 +102,34 @@ describe("locking", () => {
       await locking.methods.createLock(await mockToken.amount(amount), 6 * MONTH).send({ from: user });
       await mineBlock(6 * MONTH);
       await locking.methods.withdraw().send({ from: user });
-      expect(await tokenBalance(user)).bignumber.closeTo(bn18(amount), 1e18);
+      const balance = await tokenBalance(user);
+      expect(balance).bignumber.closeTo(bn18(amount), 1e18);
+
+      expect((await locking.methods.lockedBalanceOf(user).call()).amount).bignumber.zero;
+      await locking.methods.withdraw().send({ from: user });
+      expect(await tokenBalance(user)).bignumber.eq(balance);
+    });
+
+    it("ownable", async () => {
+      expect(await locking.methods.owner().call()).eq(deployer);
+    });
+
+    it("owner can set exponent", async () => {
+      await locking.methods.setExponent(12345).send({ from: deployer });
+      expect(await locking.methods.exponent().call()).bignumber.eq(12345);
+    });
+
+    describe("errors", () => {
+      it("withdraw only possible after lock elapsed", async () => {
+        await locking.methods.createLock(await mockToken.amount(amount), MONTH).send({ from: user });
+        await expectRevert(() => locking.methods.withdraw().send({ from: user }), "Locking:withdraw:deadline");
+      });
+
+      describe("only owner", () => {
+        it("setExponent", async () => {
+          await expectRevert(() => locking.methods.setExponent(12345).send({ from: user }), "caller is not the owner");
+        });
+      });
     });
   });
 });
