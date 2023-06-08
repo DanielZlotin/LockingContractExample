@@ -97,5 +97,12 @@ describe("locking", () => {
       expect(await tokenBalance(feeReceiver1)).bignumber.closeTo(bn18(45), 1e18);
       expect(await tokenBalance(feeReceiver2)).bignumber.closeTo(bn18(45), 1e18);
     });
+
+    it("withdraw all of the amount after the lock has elapsed", async () => {
+      await locking.methods.createLock(await mockToken.amount(amount), 6 * MONTH).send({ from: user });
+      await mineBlock(6 * MONTH);
+      await locking.methods.withdraw().send({ from: user });
+      expect(await tokenBalance(user)).bignumber.closeTo(bn18(amount), 1e18);
+    });
   });
 });

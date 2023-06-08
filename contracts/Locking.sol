@@ -48,11 +48,7 @@ contract Locking {
     }
 
     function withdraw() external {
-        // require(locks[msg.sender].amount > 0, "No lock");
-        // require(locks[msg.sender].deadline < block.timestamp, "Not yet");
-        // uint256 amount = locks[msg.sender].amount;
-        // delete locks[msg.sender];
-        // IERC20(token).safeTransfer(msg.sender, amount);
+        token.safeTransfer(msg.sender, locks[msg.sender].amount);
     }
 
     function earlyWithdrawWithPenalty(uint256 amount) external {
