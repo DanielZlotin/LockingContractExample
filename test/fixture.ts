@@ -21,7 +21,7 @@ export async function withFixture() {
   tag(deployer, "deployer");
 
   mockToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9)])).options.address);
-  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address]);
+  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address, 12_000]);
 
   expect(await locking.methods.token().call()).eq(mockToken.options.address);
 }

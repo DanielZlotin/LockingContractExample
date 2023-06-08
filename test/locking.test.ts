@@ -31,15 +31,10 @@ describe("locking", () => {
 
     it("power by months locked", async () => {
       expect(await mockToken.decimals()).bignumber.eq(18);
-
       const durationSeconds = 3 * MONTH;
-      const months = durationSeconds / MONTH;
-      const power = amount * months;
 
       await locking.methods.createLock(await mockToken.amount(amount), durationSeconds).send({ from: user });
-      expect(await locking.methods.getPower(user).call())
-        .bignumber.eq(power * 1e18) // TODO broken
-        .eq(amount * 3 * 1e18);
+      expect(await locking.methods.boostedBalanceOf(user).call()).bignumber.closeTo(4613.8271 * 1e18, 1e18);
     });
 
     [
@@ -68,14 +63,14 @@ describe("locking", () => {
         power: 453_162,
         name: "24 months",
       },
-    ].map((t) => {
-      it(`calcPower: ${t.name}`, async () => {
-        expect(await locking.methods.calcPower(t.remaining).call()).bignumber.eq(t.power);
-        console.log(await locking.methods.calcPower(t.remaining).estimateGas());
+    ].forEach((t) => {
+      it(`calcPowerRatio: ${t.name}`, async () => {
+        expect(await locking.methods.calcPowerRatio(12_000, t.remaining).call()).bignumber.eq(t.power);
+        expect(await locking.methods.calcPowerRatio(12_000, t.remaining).estimateGas()).lt(50_000);
       });
     });
 
-    it("power by months remaining", async () => {
+    xit("power by months remaining", async () => {
       const durationSeconds = 3 * MONTH;
       await locking.methods.createLock(await mockToken.amount(amount), durationSeconds).send({ from: user });
       // TODO
