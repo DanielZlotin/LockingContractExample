@@ -28,7 +28,7 @@ contract Locking is Ownable, ReentrancyGuard {
         uint256 deadline;
     }
 
-    event LockCreated(address indexed target, uint256 amount, uint256 deadline);
+    event Locked(address indexed target, uint256 amount, uint256 deadline);
 
     constructor(address _token, uint256 _exp, uint256 _penalty, address _feeReceiver1, address _feeReceiver2) {
         token = IERC20(_token);
@@ -39,14 +39,18 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * Create a lock, sending {amount} of {token} to this contract, and locking it for {durationSeconds} from now.
+     * Create or increase lock, sending {amount} of {token} to this contract, and locking it for {durationSeconds} from now.
      * Assumes {amount} allowance given to this contract.
-     * Emits LockCreated.
+     * Emits Locked.
      */
-    function createLock(uint256 amount, uint256 durationSeconds) external nonReentrant {
+    function lock(uint256 amount, uint256 durationSeconds) external nonReentrant {
+        require(amount > 0 || durationSeconds > 0, "Locking:lock:params");
         token.safeTransferFrom(msg.sender, address(this), amount);
-        locks[msg.sender] = Lock(amount, block.timestamp + durationSeconds);
-        emit LockCreated(msg.sender, amount, block.timestamp + durationSeconds);
+
+        if (locks[msg.sender].deadline == 0) locks[msg.sender].deadline = block.timestamp;
+        locks[msg.sender].amount += amount;
+        locks[msg.sender].deadline += durationSeconds;
+        emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
     }
 
     function withdraw() external nonReentrant {
