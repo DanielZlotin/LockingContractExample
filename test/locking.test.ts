@@ -1,4 +1,4 @@
-import { block, bn18 } from "@defi.org/web3-candies";
+import { block, bn18, parseEvents } from "@defi.org/web3-candies";
 import { deploy, expectRevert, mineBlock, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
 import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
@@ -125,10 +125,24 @@ describe("locking", () => {
         await expectRevert(() => locking.methods.withdraw().send({ from: user }), "Locking:withdraw:deadline");
       });
 
+      it("cannot partially early withdraw more than locked amount", async () => {
+        await locking.methods.createLock(await mockToken.amount(amount), MONTH).send({ from: user });
+        await expectRevert(async () => locking.methods.earlyWithdrawWithPenalty(await mockToken.amount(amount + 1)).send({ from: user }), "underflowed");
+      });
+
       describe("only owner", () => {
         it("setExponent", async () => {
           await expectRevert(() => locking.methods.setExponent(12345).send({ from: user }), "caller is not the owner");
         });
+      });
+    });
+
+    describe("events", () => {
+      it("LockCreated", async () => {
+        const tx = await locking.methods.createLock(await mockToken.amount(amount), MONTH).send({ from: user });
+        const events = parseEvents(tx, locking);
+        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.amount).bignumber.eq(bn18(amount));
       });
     });
   });

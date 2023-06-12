@@ -4,9 +4,10 @@ pragma solidity 0.8.18;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./ABDKMath64x64.sol";
 
-contract Locking is Ownable {
+contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ABDKMath64x64 for int128;
 
@@ -27,6 +28,8 @@ contract Locking is Ownable {
         uint256 deadline;
     }
 
+    event LockCreated(address indexed target, uint256 amount, uint256 deadline);
+
     constructor(address _token, uint256 _exp, uint256 _penalty, address _feeReceiver1, address _feeReceiver2) {
         token = IERC20(_token);
         exponent = _exp;
@@ -35,9 +38,46 @@ contract Locking is Ownable {
         feeReceiver2 = _feeReceiver2;
     }
 
-    function createLock(uint256 amount, uint256 durationSeconds) external {
+    /**
+     * Create a lock, sending {amount} of {token} to this contract, and locking it for {durationSeconds} from now.
+     * Assumes {amount} allowance given to this contract.
+     * Emits LockCreated.
+     */
+    function createLock(uint256 amount, uint256 durationSeconds) external nonReentrant {
         token.safeTransferFrom(msg.sender, address(this), amount);
         locks[msg.sender] = Lock(amount, block.timestamp + durationSeconds);
+        emit LockCreated(msg.sender, amount, block.timestamp + durationSeconds);
+    }
+
+    function withdraw() external nonReentrant {
+        require(locks[msg.sender].deadline < block.timestamp, "Locking:withdraw:deadline");
+        uint256 amount = locks[msg.sender].amount;
+        delete locks[msg.sender];
+        token.safeTransfer(msg.sender, amount);
+    }
+
+    function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
+        locks[msg.sender].amount -= amount;
+        uint256 penaltyAmount = (amount * penalty) / PRECISION;
+        uint256 amountAfterPenalty = amount - penaltyAmount;
+        token.safeTransfer(msg.sender, amountAfterPenalty);
+
+        token.safeTransfer(feeReceiver1, penaltyAmount / 2);
+        token.safeTransfer(feeReceiver2, penaltyAmount - (penaltyAmount / 2));
+    }
+
+    /**************************************
+     * View functions
+     **************************************/
+
+    /**
+     * _exponent 12000 is 1.2% exponent on locked months
+     * returns ratio based on {PRECISION}
+     */
+    function calcPowerRatio(uint256 _exponent, uint256 remainingSeconds) public pure returns (uint256 power) {
+        int128 factor = ABDKMath64x64.divu(_exponent, PRECISION);
+        int128 months = ABDKMath64x64.divu(remainingSeconds, 30 days);
+        power = months.log_2().mul(factor).exp_2().mulu(PRECISION);
     }
 
     function lockedBalanceOf(address target) external view returns (uint256 amount, uint256 deadline) {
@@ -49,27 +89,9 @@ contract Locking is Ownable {
         amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
     }
 
-    function withdraw() external {
-        require(locks[msg.sender].deadline < block.timestamp, "Locking:withdraw:deadline");
-        token.safeTransfer(msg.sender, locks[msg.sender].amount);
-        delete locks[msg.sender];
-    }
-
-    function earlyWithdrawWithPenalty(uint256 amount) external {
-        locks[msg.sender].amount -= amount;
-        uint256 penaltyAmount = (amount * penalty) / PRECISION;
-        uint256 amountAfterPenalty = amount - penaltyAmount;
-        token.safeTransfer(msg.sender, amountAfterPenalty);
-
-        token.safeTransfer(feeReceiver1, penaltyAmount / 2);
-        token.safeTransfer(feeReceiver2, penaltyAmount - (penaltyAmount / 2));
-    }
-
-    function calcPowerRatio(uint256 _exponent, uint256 remainingSeconds) public pure returns (uint256 power) {
-        int128 factor = ABDKMath64x64.divu(_exponent, PRECISION);
-        int128 months = ABDKMath64x64.divu(remainingSeconds, 30 days);
-        power = months.log_2().mul(factor).exp_2().mulu(PRECISION);
-    }
+    /**************************************
+     * Admin functions
+     **************************************/
 
     function setExponent(uint256 _exponent) external onlyOwner {
         exponent = _exponent;
