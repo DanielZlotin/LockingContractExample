@@ -1,4 +1,4 @@
-import { block, bn, bn18, parseEvents } from "@defi.org/web3-candies";
+import { block, bn, bn18, maxUint256, parseEvents } from "@defi.org/web3-candies";
 import { deploy, expectRevert, mineBlock, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
 import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
@@ -145,15 +145,20 @@ describe("locking", () => {
       expect(await locking.methods.exponent().call()).bignumber.eq(12345);
     });
 
+    it("early full withdrawal deletes the lock", async () => {
+      await locking.methods.lock(await mockToken.amount(amount / 2), MONTH * 24).send({ from: user });
+      await mineBlock(MONTH);
+      await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user });
+      expect((await locking.methods.lockedBalanceOf(user).call()).deadline).bignumber.zero;
+
+      await locking.methods.lock(await mockToken.amount(amount / 2), MONTH).send({ from: user });
+      expect((await locking.methods.lockedBalanceOf(user).call()).amount).bignumber.eq(await mockToken.amount(amount / 2));
+    });
+
     describe("errors", () => {
       it("withdraw only possible after lock elapsed", async () => {
         await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
         await expectRevert(() => locking.methods.withdraw().send({ from: user }), "Locking:withdraw:deadline");
-      });
-
-      it("cannot partially early withdraw more than locked amount", async () => {
-        await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
-        await expectRevert(async () => locking.methods.earlyWithdrawWithPenalty(await mockToken.amount(amount + 1)).send({ from: user }), "underflowed");
       });
 
       it("create lock with zero amount and duration", async () => {

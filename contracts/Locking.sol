@@ -61,7 +61,10 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
+        if (amount > locks[msg.sender].amount) amount = locks[msg.sender].amount;
         locks[msg.sender].amount -= amount;
+        if (locks[msg.sender].amount == 0) delete locks[msg.sender];
+
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
         uint256 amountAfterPenalty = amount - penaltyAmount;
         token.safeTransfer(msg.sender, amountAfterPenalty);
