@@ -128,6 +128,14 @@ describe("locking", () => {
       expect((await locking.methods.lockedBalanceOf(user).call()).deadline).bignumber.closeTo(prevDeadline + MONTH, 1);
     });
 
+    it("create lock with zero duration is valid but wasteful", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 0).send({ from: user });
+    });
+
+    it("create lock with zero amount is valid but wasteful", async () => {
+      await locking.methods.lock(0, MONTH).send({ from: user });
+    });
+
     it("ownable", async () => {
       expect(await locking.methods.owner().call()).eq(deployer);
     });
@@ -160,11 +168,31 @@ describe("locking", () => {
     });
 
     describe("events", () => {
-      it("LockCreated", async () => {
+      it("Lock", async () => {
         const tx = await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
         const events = parseEvents(tx, locking);
+        expect(events[0].event).eq("Locked");
         expect(events[0].returnValues.target).eq(user);
         expect(events[0].returnValues.amount).bignumber.eq(bn18(amount));
+      });
+
+      it("Withdraw", async () => {
+        await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
+        await mineBlock(MONTH);
+        const tx = await locking.methods.withdraw().send({ from: user });
+        const events = parseEvents(tx, locking);
+        expect(events[0].event).eq("Withdraw");
+        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.amount).bignumber.eq(bn18(amount));
+      });
+
+      it("WithdrawWithPenalty", async () => {
+        await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
+        const tx = await locking.methods.earlyWithdrawWithPenalty(await mockToken.amount(amount / 2)).send({ from: user });
+        const events = parseEvents(tx, locking);
+        expect(events[0].event).eq("WithdrawWithPenalty");
+        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.amount).bignumber.eq(bn18(amount / 2));
       });
     });
   });

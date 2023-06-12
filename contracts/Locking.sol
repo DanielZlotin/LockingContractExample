@@ -11,17 +11,14 @@ contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ABDKMath64x64 for int128;
 
-    uint256 public constant PRECISION = 10000;
-
-    IERC20 public token;
-
+    IERC20 public token; // FoT is NOT supported
     mapping(address => Lock) public locks;
 
-    uint256 public exponent;
-
-    uint256 public immutable penalty;
-    address public immutable feeReceiver1;
-    address public immutable feeReceiver2;
+    uint256 public constant PRECISION = 10000;
+    uint256 public exponent; // based on PERCISION
+    uint256 public immutable penalty; // based on PERCISION
+    address public immutable feeReceiver1; // 50% of penalties
+    address public immutable feeReceiver2; // 50% of penalties
 
     struct Lock {
         uint256 amount;
@@ -29,6 +26,8 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     event Locked(address indexed target, uint256 amount, uint256 deadline);
+    event Withdraw(address indexed target, uint256 amount);
+    event WithdrawWithPenalty(address indexed target, uint256 amount, uint256 penalty);
 
     constructor(address _token, uint256 _exp, uint256 _penalty, address _feeReceiver1, address _feeReceiver2) {
         token = IERC20(_token);
@@ -58,6 +57,7 @@ contract Locking is Ownable, ReentrancyGuard {
         uint256 amount = locks[msg.sender].amount;
         delete locks[msg.sender];
         token.safeTransfer(msg.sender, amount);
+        emit Withdraw(msg.sender, amount);
     }
 
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
@@ -68,6 +68,7 @@ contract Locking is Ownable, ReentrancyGuard {
 
         token.safeTransfer(feeReceiver1, penaltyAmount / 2);
         token.safeTransfer(feeReceiver2, penaltyAmount - (penaltyAmount / 2));
+        emit WithdrawWithPenalty(msg.sender, amount, penaltyAmount);
     }
 
     /**************************************
