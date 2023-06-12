@@ -1,5 +1,5 @@
-import { block, bn, bn18, maxUint256, parseEvents } from "@defi.org/web3-candies";
-import { deploy, expectRevert, mineBlock, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
+import { block, bn, bn18, maxUint256, parseEvents, web3, zero, zeroAddress } from "@defi.org/web3-candies";
+import { deploy, expectRevert, mineBlock, setBalance, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
 import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
 
@@ -155,7 +155,32 @@ describe("locking", () => {
       expect((await locking.methods.lockedBalanceOf(user).call()).amount).bignumber.eq(await mockToken.amount(amount / 2));
     });
 
+    it("recover tokens above total locked", async () => {
+      await locking.methods.lock(await mockToken.amount(amount / 2), MONTH * 24).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount / 2), MONTH * 24).send({ from: user });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
+
+      const balanceBefore = await tokenBalance(deployer);
+      await mockToken.methods.transfer(locking.options.address, await mockToken.amount(98765)).send({ from: deployer });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
+
+      await locking.methods.recover(mockToken.options.address, await mockToken.amount(98765)).send({ from: deployer });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
+      expect(await tokenBalance(deployer)).bignumber.eq(balanceBefore);
+    });
+
+    it("recover native balance", async () => {
+      await setBalance(locking.options.address, bn(12345 * 1e18));
+      expect(await web3().eth.getBalance(locking.options.address)).bignumber.eq(12345 * 1e18);
+      await locking.methods.recover(mockToken.address, 0).send({ from: deployer });
+      expect(await web3().eth.getBalance(locking.options.address)).bignumber.zero;
+    });
+
     describe("errors", () => {
+      it("cannot send eth to contract", async () => {
+        await expectRevert(() => web3().eth.sendTransaction({ from: user, to: locking.options.address, value: 1 }), "no fallback nor receive function");
+      });
+
       it("withdraw only possible after lock elapsed", async () => {
         await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
         await expectRevert(() => locking.methods.withdraw().send({ from: user }), "Locking:withdraw:deadline");
@@ -168,6 +193,10 @@ describe("locking", () => {
       describe("only owner", () => {
         it("setExponent", async () => {
           await expectRevert(() => locking.methods.setExponent(12345).send({ from: user }), "caller is not the owner");
+        });
+
+        it("cannot renounce ownership", async () => {
+          await expectRevert(() => locking.methods.renounceOwnership().send({ from: deployer }), "revert");
         });
       });
     });

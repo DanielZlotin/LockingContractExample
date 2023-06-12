@@ -13,6 +13,7 @@ contract Locking is Ownable, ReentrancyGuard {
 
     IERC20 public token; // FoT is NOT supported
     mapping(address => Lock) public locks;
+    uint256 public totalLocked = 0;
 
     uint256 public constant PRECISION = 10000;
     uint256 public exponent; // based on PERCISION
@@ -49,6 +50,7 @@ contract Locking is Ownable, ReentrancyGuard {
         if (locks[msg.sender].deadline == 0) locks[msg.sender].deadline = block.timestamp;
         locks[msg.sender].amount += amount;
         locks[msg.sender].deadline += durationSeconds;
+        totalLocked += amount;
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
     }
 
@@ -56,17 +58,22 @@ contract Locking is Ownable, ReentrancyGuard {
         require(locks[msg.sender].deadline < block.timestamp, "Locking:withdraw:deadline");
         uint256 amount = locks[msg.sender].amount;
         delete locks[msg.sender];
+        totalLocked -= amount;
         token.safeTransfer(msg.sender, amount);
         emit Withdraw(msg.sender, amount);
     }
 
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
-        if (amount > locks[msg.sender].amount) amount = locks[msg.sender].amount;
-        locks[msg.sender].amount -= amount;
-        if (locks[msg.sender].amount == 0) delete locks[msg.sender];
+        if (amount >= locks[msg.sender].amount) {
+            amount = locks[msg.sender].amount;
+            delete locks[msg.sender];
+        } else {
+            locks[msg.sender].amount -= amount;
+        }
+        totalLocked -= amount;
 
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
-        uint256 amountAfterPenalty = amount - penaltyAmount;
+        uint256 amountAfterPenalty = amount - penaltyAmount; // this also protects (by underflowing) against penalty > 100%, which can open exploit
         token.safeTransfer(msg.sender, amountAfterPenalty);
 
         token.safeTransfer(feeReceiver1, penaltyAmount / 2);
@@ -103,5 +110,15 @@ contract Locking is Ownable, ReentrancyGuard {
 
     function setExponent(uint256 _exponent) external onlyOwner {
         exponent = _exponent;
+    }
+
+    function renounceOwnership() public view override onlyOwner {
+        revert();
+    }
+
+    function recover(address tokenAddress, uint256 tokenAmount) external onlyOwner {
+        require(tokenAddress != address(token) || tokenAmount <= token.balanceOf(address(this)) - totalLocked, "Locking:recoverERC20:locked");
+        IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
+        Address.sendValue(payable(owner()), address(this).balance);
     }
 }
