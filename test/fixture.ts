@@ -6,6 +6,7 @@ import BN from "bignumber.js";
 
 export let deployer: string;
 export let user: string;
+export let userTwo: string;
 export let feeReceiver1: string;
 export let feeReceiver2: string;
 
@@ -22,7 +23,9 @@ export async function withFixture() {
   user = await account(0);
   feeReceiver1 = await account(1);
   feeReceiver2 = await account(2);
+  userTwo = await account(3)
   tag(user, "user");
+  tag(userTwo, "userTwo")
   tag(deployer, "deployer");
   tag(feeReceiver1, "feeReceiver1");
   tag(feeReceiver2, "feeReceiver2");
@@ -37,6 +40,9 @@ export async function withFixture() {
 export async function withMockTokens(amount: BN.Value) {
   await mockToken.methods.transfer(user, await mockToken.amount(amount)).send({ from: deployer });
   await mockToken.methods.approve(locking.options.address, await mockToken.amount(amount)).send({ from: user });
+
+  await mockToken.methods.transfer(userTwo, await mockToken.amount(amount)).send({ from: deployer });
+  await mockToken.methods.approve(locking.options.address, await mockToken.amount(amount)).send({ from: userTwo });
 }
 
 export async function tokenBalance(address: string) {

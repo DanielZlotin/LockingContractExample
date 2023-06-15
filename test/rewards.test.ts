@@ -2,7 +2,7 @@ import { block, bn, bn18, maxUint256, parseEvents, web3, zero, zeroAddress } fro
 import { deploy, expectRevert, mineBlock, mineBlocks, setBalance, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 
 import { expect } from "chai";
-import { MONTH, locking, mockToken, rewardToken, user, withFixture, withMockTokens, deployer } from "./fixture";
+import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer } from "./fixture";
 
 useChaiBigNumber();
 
@@ -30,6 +30,19 @@ describe.only("Rewards", () => {
       await mineBlock(1 * MONTH);
       const pendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
       expect(pendingRewards).bignumber.closeTo(bn18(25_000), bn18(1));
+    });
+
+    it("two users should have reward if did stake and didn't claim so far", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount), 1 * MONTH).send({ from: userTwo });
+      
+      await mineBlock(1 * MONTH);
+
+      const userOnePendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
+      const userTwoPendingRewards = await locking.methods.pendingRewards(userTwo, rewardToken.options.address).call();
+
+      expect(userOnePendingRewards).bignumber.closeTo(bn18(19_722), 1e18);
+      expect(userTwoPendingRewards).bignumber.closeTo(bn18(5_277), 1e18);
     });
 
     it("deployer can add reward programs", async () => {
