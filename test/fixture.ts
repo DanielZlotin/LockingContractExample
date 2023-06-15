@@ -10,6 +10,7 @@ export let feeReceiver1: string;
 export let feeReceiver2: string;
 
 export let mockToken: MockERC20 & Token;
+export let rewardToken: MockERC20 & Token;
 export let locking: Locking;
 
 export const DAY = 60 * 60 * 24;
@@ -26,7 +27,8 @@ export async function withFixture() {
   tag(feeReceiver1, "feeReceiver1");
   tag(feeReceiver2, "feeReceiver2");
 
-  mockToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9)])).options.address);
+  mockToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "MockToken"])).options.address);
+  rewardToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "MockReward"])).options.address);
   locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address, 12000, 9000, feeReceiver1, feeReceiver2]);
 
   expect(await locking.methods.token().call()).eq(mockToken.options.address);

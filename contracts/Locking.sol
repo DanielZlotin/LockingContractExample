@@ -104,9 +104,34 @@ contract Locking is Ownable, ReentrancyGuard {
         amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
     }
 
+
+
+    struct RewardProgram {
+        uint256 rewardsPerSecond;
+        uint256 lastRewardTimestamp; // Last time reward has been claimed
+        // 75k in 3 months
+
+        //50k per 2months == 25k per month x 2 == 216k x 2 blocks == 432k blocks = 0.11574 per block
+    }
+
+    mapping(address => RewardProgram) public rewards;
+
+    function pendingRewards(address target, address token) external view returns (uint256) {
+        RewardProgram memory rewardProgram = rewards[token];
+        uint256 _seconds = block.timestamp - rewardProgram.lastRewardTimestamp;
+        uint256 rewards = _seconds * rewardProgram.rewardsPerSecond;
+        return rewards;
+    }
+
     /**************************************
      * Admin functions
      **************************************/
+
+    function addReward(uint256 amount, address token, uint256 rewardsPerSecond) external onlyOwner {
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        rewards[token].rewardsPerSecond = rewardsPerSecond;
+        rewards[token].lastRewardTimestamp = block.timestamp;
+    }
 
     function setExponent(uint256 _exponent) external onlyOwner {
         exponent = _exponent;
