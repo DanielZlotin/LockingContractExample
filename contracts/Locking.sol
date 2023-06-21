@@ -16,6 +16,7 @@ contract Locking is Ownable, ReentrancyGuard {
     IERC20 public token; // FoT is NOT supported
     mapping(address => Lock) public locks;
     uint256 public totalLocked = 0;
+    uint256 public _currentMonthIndex = 0;
 
     uint256 public constant PRECISION = 10000;
     uint256 public exponent; // based on PERCISION
@@ -112,11 +113,33 @@ contract Locking is Ownable, ReentrancyGuard {
         */
         
         uint256 durationMonths = durationSeconds / 30 days;
-        uint256 _currentMonthIndex = currentMonthIndex();
+        uint256 _calculatedCurMonthIndex = currentMonthIndex();
+        // computed 3, current is 23
+        // need to update 23, 24, 0, 1, 2
+        // First loop: i=23
 
-        for (uint256 i = 0; i < durationMonths - 1; i++) {
+        // for (uint256 i = lastKnown; i != currentComputed; i = (i + 1) % 24) {
+        
+        // 3-23 = -18
+        // 
+        // we want to zero out 
+        console.log("_calculatedCurMonthIndex", _calculatedCurMonthIndex);
+        console.log("_currentMonthIndex", _currentMonthIndex);
+        if (_calculatedCurMonthIndex != _currentMonthIndex) {
+            uint256 i = _currentMonthIndex;
+            while (i != _calculatedCurMonthIndex) {
+                console.log("clearing out %s", i);
+                totalBoost[i] = 0;
+                i = (i + 1) % 24;
+            }
+        
+            console.log("setting out %s, %s", _currentMonthIndex, _calculatedCurMonthIndex);
+            _currentMonthIndex = _calculatedCurMonthIndex;
+        }
+
+        for (uint256 i = 0; i < durationMonths; i++) {
             // minus 1 to account for 0 index in totalBoost
-            totalBoost[_currentMonthIndex + i] += amount * monthToBoost[durationMonths - i - 1];
+            totalBoost[(_currentMonthIndex + i) % 24] += amount * monthToBoost[durationMonths - i - 1];
         }
 
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
@@ -174,8 +197,17 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function totalBoosted() external view returns (uint256) {
+        // TODO do we return stored or calculated??
         return totalBoost[currentMonthIndex()] / PRECISION;
     }
+
+    // user 1 - 3 months
+    // 1 month pass
+    // user 2 - 12 months
+    // 3 months pass
+
+    // month 16 - last touched, staked there for 24 months [16...15]
+    // month 24
 
     struct RewardProgram {
         uint256 rewardsPerSecond;
