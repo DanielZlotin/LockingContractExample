@@ -6,7 +6,7 @@ import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, wit
 
 useChaiBigNumber();
 
-describe.only("Rewards", () => {
+describe("Rewards", () => {
   beforeEach(async () => withFixture());
 
   describe("with tokens", () => {
