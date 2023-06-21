@@ -5,6 +5,11 @@ import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, t
 
 useChaiBigNumber();
 
+// Qs
+// - huge array instead of cyclic?
+// - are we ok with user depositing after 29 days being able to unstake after 1 day and losing boost if he
+//   intended to stake for only 1 month
+
 describe.only("locking boosted total", () => {
   beforeEach(async () => withFixture());
 
