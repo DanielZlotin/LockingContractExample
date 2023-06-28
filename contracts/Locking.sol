@@ -132,17 +132,13 @@ contract Locking is Ownable, ReentrancyGuard {
         // 3-23 = -18
         // 
         // we want to zero out 
-        console.log("_calculatedCurMonthIndex", _calculatedCurMonthIndex);
-        console.log("_currentMonthIndex", _currentMonthIndex);
         if (_calculatedCurMonthIndex != _currentMonthIndex) {
             uint256 i = _currentMonthIndex;
             while (i != _calculatedCurMonthIndex) {
-                console.log("clearing out %s", i);
                 totalBoost[i] = 0;
                 i = (i + 1) % 24;
             }
         
-            console.log("setting out %s, %s", _currentMonthIndex, _calculatedCurMonthIndex);
             _currentMonthIndex = _calculatedCurMonthIndex;
         }
 
@@ -255,5 +251,12 @@ contract Locking is Ownable, ReentrancyGuard {
         require(tokenAddress != address(token) || tokenAmount <= token.balanceOf(address(this)) - totalLocked, "Locking:recoverERC20:locked");
         IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
         Address.sendValue(payable(owner()), address(this).balance);
+    }
+
+    function updateBoostFactors(uint256[] memory _monthToBoost) external onlyOwner {
+        require(_monthToBoost.length == 24, "Locking:updateBoostFactors:invalidLength");
+        for (uint256 i = 0; i < _monthToBoost.length; i++) {
+            monthToBoost[i] = _monthToBoost[i];
+        }
     }
 }

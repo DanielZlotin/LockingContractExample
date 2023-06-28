@@ -17,6 +17,7 @@ export let locking: Locking;
 export const DAY = 60 * 60 * 24;
 export const WEEK = DAY * 7;
 export const MONTH = DAY * 30;
+export const PRECISION = 10000;
 
 export async function withFixture() {
   deployer = await account(9);

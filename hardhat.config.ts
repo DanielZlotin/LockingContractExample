@@ -13,9 +13,6 @@ task("foo", async () => {});
 export default _.merge(hardhatDefaultConfig(), {
   networks: {
     hardhat: {
-      // forking: {
-      //   blockNumber: 17576915
-      // }
     },
   },
   mocha: {
