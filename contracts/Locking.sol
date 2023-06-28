@@ -46,30 +46,39 @@ contract Locking is Ownable, ReentrancyGuard {
         feeReceiver2 = _feeReceiver2; 
         deployTime = block.timestamp;  
 
-        monthToBoost[0] = 10000;    // 1.00
-        monthToBoost[1] = 23000;    // 2.30
-        monthToBoost[2] = 37400;    // 3.74
-        monthToBoost[3] = 52800;    // 5.28
-        monthToBoost[4] = 69000;    // 6.90
-        monthToBoost[5] = 85900;    // 8.59
-        monthToBoost[6] = 103300;   // 10.33
-        monthToBoost[7] = 121300;   // 12.13
-        monthToBoost[8] = 139700;   // 13.97
-        monthToBoost[9] = 158500;  // 15.85
-        monthToBoost[10] = 177700;  // 17.77
-        monthToBoost[11] = 197300;  // 19.73
-        monthToBoost[12] = 217100;  // 21.71
-        monthToBoost[13] = 237300;  // 23.73
-        monthToBoost[14] = 257800;  // 25.78
-        monthToBoost[15] = 278600;  // 27.86
-        monthToBoost[16] = 299600;  // 29.96
-        monthToBoost[17] = 320900;  // 32.09
-        monthToBoost[18] = 342400;  // 34.24
-        monthToBoost[19] = 364100;  // 36.41
-        monthToBoost[20] = 386100;  // 38.61
-        monthToBoost[21] = 408200;  // 40.82
-        monthToBoost[22] = 430600;  // 43.06
-        monthToBoost[23] = 453200;  // 45.32
+        // 1.00 for funds locked for up to 1 month
+        monthToBoost[0] = 10000;    
+
+        // 3.74 for funds locked for 1+ months
+        monthToBoost[1] = 37400;    
+        monthToBoost[2] = 37400;    
+
+        // 8.59 for funds locked for 3+ months
+        monthToBoost[3] = 85900;    
+        monthToBoost[4] = 85900;   
+        monthToBoost[5] = 85900;    
+
+        // 19.73 for funds locked for 6+ months
+        monthToBoost[6] = 197300;  
+        monthToBoost[7] = 197300;   
+        monthToBoost[8] = 197300;  
+        monthToBoost[9] = 197300;  
+        monthToBoost[10] = 197300;  
+        monthToBoost[11] = 197300; 
+        
+        // 45.32 for funds locked for 12+ months
+        monthToBoost[12] = 453200; 
+        monthToBoost[13] = 453200; 
+        monthToBoost[14] = 453200; 
+        monthToBoost[15] = 453200; 
+        monthToBoost[16] = 453200; 
+        monthToBoost[17] = 453200; 
+        monthToBoost[18] = 453200; 
+        monthToBoost[19] = 453200; 
+        monthToBoost[20] = 453200; 
+        monthToBoost[21] = 453200; 
+        monthToBoost[22] = 453200; 
+        monthToBoost[23] = 453200;  
     }
 
     function currentMonthIndex() internal view returns (uint256) {

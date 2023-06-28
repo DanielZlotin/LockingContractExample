@@ -49,38 +49,48 @@ describe.only("locking boosted total", () => {
       await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
       await mineBlock(45 * DAY);
       const totalBoosted = await locking.methods.totalBoosted().call();
-      expect(totalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(2.3));
+      expect(totalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(3.74));
     });
 
-    it("total boosted power 2.5months after locking for two users decays correctly", async () => {
+    it("total boosted power 2.5months after locking for two users decays by 2 months", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
       await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
       await mineBlock(75 * DAY); // Decays by 2 months
       const totalBoosted = await locking.methods.totalBoosted().call();
       const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(1);
-      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(5.28);
+      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(8.59);
       expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted.plus(secondUserBoosted));
     });
-    
-    it("two users locking at different times decay correctly", async () => {
+
+    it("total boosted power 3 months after locking for two users decays by 3 months", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-      await mineBlock(35 * DAY); // Decays by 1 months
       await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
-      await mineBlock(35 * DAY); // Decays by 1 months
-      const totalBoosted = await locking.methods.totalBoosted().call();
-      const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(1);
-      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(6.9);
-      expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted.plus(secondUserBoosted));
-    });
-    
-    it("two users locking at different times decay correctly", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-      await mineBlock(35 * DAY); // Decays by 1 months
-      await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
-      await mineBlock(65 * DAY); // Decays by 2 months
+      await mineBlock(90 * DAY); // Decays by 3 months
       const totalBoosted = await locking.methods.totalBoosted().call();
       const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(0);
-      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(5.28);
+      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(3.74);
+      expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted.plus(secondUserBoosted));
+    });
+    
+    it("two users locking at different times decay correctly", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
+      await mineBlock(35 * DAY); // Decays by 1 months
+      await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
+      await mineBlock(35 * DAY); // Decays by another 1 month
+      const totalBoosted = await locking.methods.totalBoosted().call();
+      const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(1);
+      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(8.59);
+      expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted.plus(secondUserBoosted));
+    });
+    
+    it("two users locking at different times decay correctly", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
+      await mineBlock(35 * DAY); // Decays by 1 months
+      await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
+      await mineBlock(65 * DAY); // Decays by another 2 months
+      const totalBoosted = await locking.methods.totalBoosted().call();
+      const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(0);
+      const secondUserBoosted = (await mockToken.amount(amount)).multipliedBy(8.59);
       expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted.plus(secondUserBoosted));
     });
     
@@ -89,7 +99,7 @@ describe.only("locking boosted total", () => {
       await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
       await mineBlock(65 * DAY); // Decays by 2 months
       const totalBoosted = await locking.methods.totalBoosted().call();
-      const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(40.82);
+      const firstUserBoosted = (await mockToken.amount(amount)).multipliedBy(45.32);
       expect(totalBoosted).to.be.bignumber.eq(firstUserBoosted);
     });
 

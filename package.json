@@ -8,9 +8,9 @@
     "url": "git+https://github.com/DanielZlotin/locking-contract-example.git"
   },
   "dependencies": {
-    "@defi.org/web3-candies": "4.x"
+    "@defi.org/web3-candies": "4.x",
+    "hardhat-watcher": "^2.5.0"
   },
-  "devDependencies": {},
   "scripts": {
     "prettier": "prettier --write '{contracts,src,test}/**/*.{ts,js,json,sol}'",
     "prebuild": "npm run prettier",
