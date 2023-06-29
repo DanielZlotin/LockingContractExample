@@ -51,6 +51,8 @@ describe("Rewards", () => {
       expect(rewardProgram.lastRewardTimestamp).bignumber.closeTo((await block()).timestamp, 1);
     });
 
+    
+
     // TODO: write test that checks when more than 50K rewards have been allocated
   });
 });

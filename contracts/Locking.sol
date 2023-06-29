@@ -25,7 +25,7 @@ contract Locking is Ownable, ReentrancyGuard {
     address public immutable feeReceiver2; // 50% of penalties
 
     mapping(uint256 => uint256) public monthToBoost;
-    uint256[24] public totalBoost;
+    uint256[24] public lockedPerMonth;
 
     struct Lock {
         uint256 amount;
@@ -85,6 +85,20 @@ contract Locking is Ownable, ReentrancyGuard {
         return uint256((block.timestamp - deployTime) / 30 days) % 24;
     }
 
+    function zeroOutStaleMonths() internal {
+        uint256 _calculatedCurMonthIndex = currentMonthIndex();
+
+        if (_calculatedCurMonthIndex != _currentMonthIndex) {
+            uint256 i = _currentMonthIndex;
+            while (i != _calculatedCurMonthIndex) {
+                lockedPerMonth[i] = 0;
+                i = (i + 1) % 24;
+            }
+        
+            _currentMonthIndex = _calculatedCurMonthIndex;
+        }
+    }
+
     /**
      * Create or increase lock, sending {amount} of {token} to this contract, and locking it for {durationSeconds} from now.
      * Assumes {amount} allowance given to this contract.
@@ -98,53 +112,14 @@ contract Locking is Ownable, ReentrancyGuard {
         locks[msg.sender].amount += amount;
         locks[msg.sender].deadline += durationSeconds;
         totalLocked += amount;
-
-        // delta = current timestamp - deploy timestamp
-        // delta / 30 days
-        // Math.floor((((Date.now())) / (86400*30)) % 24)
-
-        // (block.timestamp / 30 days) % 24
-
-        /*
-            contract deployment is 21-06-2023
-            "CUR" is calculated to be 0
-            Luke deposits on 23-06-2023 for 3 months => [30, 20, 10, ....]
-            Shahar deposits on 20-07-2023 for 3 months => [60, 40 , 20, ....]
-            the 22-07-2023 arrives, CUR is calculated as 1 => [40 , 20, ....]
-        */
-        
-        /*
-            contract deployment is 21-06-2023
-            "CUR" is calculated to be 0
-            Luke deposits on 23-06-2023 for 3 months =>       [30, 20, 10, ....]
-            Shahar deposits on 20-07-2023 for 1 months =>     [60, 20 , 10, ....]
-            the 22-07-2023 arrives, CUR is calculated as 1 => [20 , 10, ....]
-        */
         
         uint256 durationMonths = durationSeconds / 30 days;
-        uint256 _calculatedCurMonthIndex = currentMonthIndex();
-        // computed 3, current is 23
-        // need to update 23, 24, 0, 1, 2
-        // First loop: i=23
-
-        // for (uint256 i = lastKnown; i != currentComputed; i = (i + 1) % 24) {
-        
-        // 3-23 = -18
-        // 
-        // we want to zero out 
-        if (_calculatedCurMonthIndex != _currentMonthIndex) {
-            uint256 i = _currentMonthIndex;
-            while (i != _calculatedCurMonthIndex) {
-                totalBoost[i] = 0;
-                i = (i + 1) % 24;
-            }
-        
-            _currentMonthIndex = _calculatedCurMonthIndex;
-        }
+     
+        zeroOutStaleMonths();
 
         for (uint256 i = 0; i < durationMonths; i++) {
-            // minus 1 to account for 0 index in totalBoost
-            totalBoost[(_currentMonthIndex + i) % 24] += amount * monthToBoost[durationMonths - i - 1];
+            // minus 1 to account for 0 index in lockedPerMonth
+            lockedPerMonth[(_currentMonthIndex + i) % 24] += amount;
         }
 
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
@@ -203,7 +178,49 @@ contract Locking is Ownable, ReentrancyGuard {
 
     function totalBoosted() external view returns (uint256) {
         // TODO do we return stored or calculated??
-        return totalBoost[currentMonthIndex()] / PRECISION;
+        uint256 currentMonth = currentMonthIndex();
+        // 100 for 24m
+        // 100 for 3m 
+        // total 4500+374=4874
+        // [4874, 4874, 4600, ..., 100, 0...]
+        // [200, 200, 200, 100, 100, ...]
+
+        // [{totalBoosted: 4874, locked: 200}, {totalBoosted: 4874, locked: 200},..., {totalBoosted: 4500, locked: 100}, ...]
+        console.log('lockedPerMonth[currentMonth]', lockedPerMonth[currentMonth]);
+        console.log('monthToBoost[currentMonth]', monthToBoost[currentMonth]);
+        return (lockedPerMonth[currentMonth] * monthToBoost[currentMonth]) / PRECISION;
+    }
+
+
+    /*
+    output of this function is a 24-element array, named lockedForDuration, ex:
+    lockedForDuration[23] = 1000
+    lockedForDuration[22] = 0
+    ...
+    lockedForDuration[6] = 0
+    lockedForDuration[5] = 300
+    ...
+    lockedForDuration[0] = 0
+
+    this allows us to calculate the total boost, as if we were re-locking these amounts, each element to its respective duration
+    */
+    function _calculateLockedForDuration() public returns (uint256[24] memory lockedForDuration) {
+        zeroOutStaleMonths();
+        // get the current period index
+        uint256 currentPeriodIndex = currentMonthIndex();
+        // get the index to the period in 24 months (maximum lock duration)
+        uint256 i = (currentPeriodIndex + 23) % 24;
+        // we need to store the most recent amount locked at the end of the array
+        uint256 shittyCounter = 23;
+        // variable to store the diff between the last different amount period and this one
+        uint256 lastSeenAmount = 0;
+        // iterate backwards over the previous 24 months, and return the amount locked for each month
+        while (currentPeriodIndex != i) {
+            lockedForDuration[shittyCounter] = lockedPerMonth[i] - lastSeenAmount;
+            lastSeenAmount = lockedPerMonth[i];
+            i = (i + 24 - 1) % 24; // TODO fix somehow such that the -1 comes before 24?
+            shittyCounter -= 1;
+        }
     }
 
     // user 1 - 3 months

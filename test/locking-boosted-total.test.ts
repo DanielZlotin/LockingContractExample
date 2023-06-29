@@ -148,17 +148,56 @@ describe.only("locking boosted total", () => {
         }
       });
 
-      // it("changes to boost factors are relected in total boosts", async () => {
-      //   await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
-      //   await mineBlock(35 * DAY); // Decays by 1 months
-      //   const originalTotalBoosted = await locking.methods.totalBoosted().call();
-      //   expect(originalTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(45.32));
+      it("changes to boost factors are relected in total boosts", async () => {
+        await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
+        await mineBlock(35 * DAY); // Decays by 1 months
+        const originalTotalBoosted = await locking.methods.totalBoosted().call();
+        expect(originalTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(45.32));
 
-      //   await updateBoostFactors();
+        await updateBoostFactors();
 
-      //   const updatedTotalBoosted = await locking.methods.totalBoosted().call();
-      //   expect(updatedTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(newBoostFactor));
-      // });
+        const updatedTotalBoosted = await locking.methods.totalBoosted().call();
+        expect(updatedTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(newBoostFactor));
+      });
+    });
+
+    describe.only("_calculateLockedForDuration", () => {
+      it("returns correct amount locked when only single lock", async () => {
+        await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
+        const locked = await locking.methods._calculateLockedForDuration().call();
+        const expectedLocked = new Array(24).fill("0");
+        expectedLocked[23] = String(await mockToken.amount(amount));
+
+        expect(locked).to.eql(expectedLocked);
+      });
+      
+      it("returns correct amount locked when only single lock with time shifts", async () => {
+        await mineBlock(12 * MONTH); 
+        await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
+        await mineBlock(9 * MONTH); 
+        const locked = await locking.methods._calculateLockedForDuration().call();
+        const expectedLocked = new Array(24).fill("0");
+        expectedLocked[14] = String(await mockToken.amount(amount));
+
+        expect(locked).to.eql(expectedLocked);
+      });
+
+      it("returns correct amount locked when multiple locks with multiple time shifts", async () => {
+        const userLockedAmount = amount / 2
+        await locking.methods.lock(await mockToken.amount(userLockedAmount), 12 * MONTH).send({ from: user });
+        await mineBlock(7 * MONTH);
+        await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });
+        await mineBlock(1 * MONTH);
+        await locking.methods.lock(await mockToken.amount(userLockedAmount), 24 * MONTH).send({ from: user });
+
+        const locked = await locking.methods._calculateLockedForDuration().call();
+        const expectedLocked = new Array(24).fill("0");
+        expectedLocked[3] = String(await mockToken.amount(userLockedAmount)); // first user (first portion)
+        expectedLocked[4] = String(await mockToken.amount(amount)); // second user
+        expectedLocked[23] = String(await mockToken.amount(userLockedAmount)); // first user (second portion)
+
+        expect(locked).to.eql(expectedLocked);
+      });
     });
   });
 });
