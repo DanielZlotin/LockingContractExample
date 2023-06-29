@@ -130,11 +130,10 @@ describe.only("locking boosted total", () => {
     });
 
     describe("Configurable boosts", () => {
-      const newBoostFactor = 0.5;
-      const newBoostFactorWithPrecision = newBoostFactor * PRECISION;
+      const newBoostFactors = [0.5, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
 
       const updateBoostFactors = async () => {
-        await locking.methods.updateBoostFactors(new Array(24).fill(newBoostFactorWithPrecision).map((x, i) => x + i)).send({ from: deployer });
+        await locking.methods.updateBoostFactors(newBoostFactors.map(x => x * PRECISION)).send({ from: deployer });
       };
 
       it("monthly boosts should be admin configurable", async () => {
@@ -144,7 +143,7 @@ describe.only("locking boosted total", () => {
 
         for (let i = 0; i < 24; i++) {
           const updatedBoostFactor = await locking.methods.monthToBoost(i).call();
-          expect(updatedBoostFactor).to.eq(String(newBoostFactorWithPrecision + i));
+          expect(updatedBoostFactor).to.eq(String(newBoostFactors[i] * PRECISION));
         }
       });
 
@@ -157,11 +156,11 @@ describe.only("locking boosted total", () => {
         await updateBoostFactors();
 
         const updatedTotalBoosted = await locking.methods.totalBoosted().call();
-        expect(updatedTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(newBoostFactor));
+        expect(updatedTotalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(newBoostFactors[22]));
       });
     });
 
-    describe.only("_calculateLockedForDuration", () => {
+    describe("_calculateLockedForDuration", () => {
       it("returns correct amount locked when only single lock", async () => {
         await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
         const locked = await locking.methods._calculateLockedForDuration().call();
@@ -170,11 +169,11 @@ describe.only("locking boosted total", () => {
 
         expect(locked).to.eql(expectedLocked);
       });
-      
+
       it("returns correct amount locked when only single lock with time shifts", async () => {
-        await mineBlock(12 * MONTH); 
+        await mineBlock(12 * MONTH);
         await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
-        await mineBlock(9 * MONTH); 
+        await mineBlock(9 * MONTH);
         const locked = await locking.methods._calculateLockedForDuration().call();
         const expectedLocked = new Array(24).fill("0");
         expectedLocked[14] = String(await mockToken.amount(amount));
@@ -183,7 +182,7 @@ describe.only("locking boosted total", () => {
       });
 
       it("returns correct amount locked when multiple locks with multiple time shifts", async () => {
-        const userLockedAmount = amount / 2
+        const userLockedAmount = amount / 2;
         await locking.methods.lock(await mockToken.amount(userLockedAmount), 12 * MONTH).send({ from: user });
         await mineBlock(7 * MONTH);
         await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: userTwo });

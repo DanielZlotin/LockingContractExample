@@ -176,19 +176,18 @@ contract Locking is Ownable, ReentrancyGuard {
         amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
     }
 
-    function totalBoosted() external view returns (uint256) {
+    function totalBoosted() external returns (uint256) {
         // TODO do we return stored or calculated??
-        uint256 currentMonth = currentMonthIndex();
-        // 100 for 24m
-        // 100 for 3m 
-        // total 4500+374=4874
-        // [4874, 4874, 4600, ..., 100, 0...]
-        // [200, 200, 200, 100, 100, ...]
 
-        // [{totalBoosted: 4874, locked: 200}, {totalBoosted: 4874, locked: 200},..., {totalBoosted: 4500, locked: 100}, ...]
-        console.log('lockedPerMonth[currentMonth]', lockedPerMonth[currentMonth]);
-        console.log('monthToBoost[currentMonth]', monthToBoost[currentMonth]);
-        return (lockedPerMonth[currentMonth] * monthToBoost[currentMonth]) / PRECISION;
+        uint256[24] memory lockedForDuration = _calculateLockedForDuration();
+
+        uint256 _totalBoosted;
+        for (uint256 i = 0; i < 24; i++) {
+            // console.log("lockedForDuration", lockedForDuration[i]);
+            _totalBoosted += lockedForDuration[i] * monthToBoost[i];
+        }
+
+        return _totalBoosted / PRECISION;
     }
 
 
@@ -221,6 +220,9 @@ contract Locking is Ownable, ReentrancyGuard {
             i = (i + 24 - 1) % 24; // TODO fix somehow such that the -1 comes before 24?
             shittyCounter -= 1;
         }
+        // TODO: refactor this 
+        lockedForDuration[0] = lockedPerMonth[i] - lastSeenAmount;
+
     }
 
     // user 1 - 3 months
