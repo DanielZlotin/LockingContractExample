@@ -25,7 +25,8 @@ contract Locking is Ownable, ReentrancyGuard {
     address public immutable feeReceiver2; // 50% of penalties
 
     mapping(uint256 => uint256) public monthToBoost;
-    uint256[24] public lockedPerMonth;
+    // TODO: address compiler warning
+    uint256[100000000000000000000000000000] public lockedPerMonth;
 
     struct Lock {
         uint256 amount;
@@ -82,19 +83,13 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function currentMonthIndex() internal view returns (uint256) {
-        return uint256((block.timestamp - deployTime) / 30 days) % 24;
+        return uint256((block.timestamp - deployTime) / 30 days);
     }
 
-    function zeroOutStaleMonths() internal {
+    function updateCurrentMonthIndex() internal {
         uint256 _calculatedCurMonthIndex = currentMonthIndex();
 
-        if (_calculatedCurMonthIndex != _currentMonthIndex) {
-            uint256 i = _currentMonthIndex;
-            while (i != _calculatedCurMonthIndex) {
-                lockedPerMonth[i] = 0;
-                i = (i + 1) % 24;
-            }
-        
+        if (_calculatedCurMonthIndex != _currentMonthIndex) {        
             _currentMonthIndex = _calculatedCurMonthIndex;
         }
     }
@@ -114,12 +109,11 @@ contract Locking is Ownable, ReentrancyGuard {
         totalLocked += amount;
         
         uint256 durationMonths = durationSeconds / 30 days;
-     
-        zeroOutStaleMonths();
+
+        updateCurrentMonthIndex();
 
         for (uint256 i = 0; i < durationMonths; i++) {
-            // minus 1 to account for 0 index in lockedPerMonth
-            lockedPerMonth[(_currentMonthIndex + i) % 24] += amount;
+            lockedPerMonth[(_currentMonthIndex + i)] += amount;
         }
 
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
@@ -204,11 +198,10 @@ contract Locking is Ownable, ReentrancyGuard {
     this allows us to calculate the total boost, as if we were re-locking these amounts, each element to its respective duration
     */
     function _calculateLockedForDuration() public returns (uint256[24] memory lockedForDuration) {
-        zeroOutStaleMonths();
         // get the current period index
         uint256 currentPeriodIndex = currentMonthIndex();
         // get the index to the period in 24 months (maximum lock duration)
-        uint256 i = (currentPeriodIndex + 23) % 24;
+        uint256 i = currentPeriodIndex + 23;
         // we need to store the most recent amount locked at the end of the array
         uint256 shittyCounter = 23;
         // variable to store the diff between the last different amount period and this one
@@ -217,7 +210,7 @@ contract Locking is Ownable, ReentrancyGuard {
         while (currentPeriodIndex != i) {
             lockedForDuration[shittyCounter] = lockedPerMonth[i] - lastSeenAmount;
             lastSeenAmount = lockedPerMonth[i];
-            i = (i + 24 - 1) % 24; // TODO fix somehow such that the -1 comes before 24?
+            i -= 1; // TODO fix somehow such that the -1 comes before 24?
             shittyCounter -= 1;
         }
         // TODO: refactor this 
