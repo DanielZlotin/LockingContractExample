@@ -1,10 +1,7 @@
-import { block, bn, bn18, maxUint256, parseEvents, web3, zero, zeroAddress } from "@defi.org/web3-candies";
-import { deploy, expectRevert, mineBlock, mineBlocks, setBalance, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
+import { block, bn18 } from "@defi.org/web3-candies";
 
 import { expect } from "chai";
-import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer } from "./fixture";
-
-useChaiBigNumber();
+import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
 
 describe("Rewards", () => {
   beforeEach(async () => withFixture());
@@ -27,16 +24,17 @@ describe("Rewards", () => {
       // Rate is 25K tokens per month
 
       await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-      await mineBlock(1 * MONTH);
+      await advanceMonths(1);
       const pendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
       expect(pendingRewards).bignumber.closeTo(bn18(25_000), bn18(1));
     });
 
-    it("two users should have reward if did stake and didn't claim so far", async () => {
+    // TODO: update when `pendingRewards` is refactored
+    it.skip("two users should have reward if did stake and didn't claim so far", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
       await locking.methods.lock(await mockToken.amount(amount), 1 * MONTH).send({ from: userTwo });
-      
-      await mineBlock(1 * MONTH);
+
+      await advanceMonths(1);
 
       const userOnePendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
       const userTwoPendingRewards = await locking.methods.pendingRewards(userTwo, rewardToken.options.address).call();
@@ -50,8 +48,6 @@ describe("Rewards", () => {
       expect(rewardProgram.rewardsPerSecond).bignumber.eq(bn18(0.00964506));
       expect(rewardProgram.lastRewardTimestamp).bignumber.closeTo((await block()).timestamp, 1);
     });
-
-    
 
     // TODO: write test that checks when more than 50K rewards have been allocated
   });

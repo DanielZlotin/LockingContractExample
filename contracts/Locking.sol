@@ -170,14 +170,13 @@ contract Locking is Ownable, ReentrancyGuard {
         amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
     }
 
-    function totalBoosted() external returns (uint256) {
+    function totalBoosted() external view returns (uint256) {
         // TODO do we return stored or calculated??
 
         uint256[24] memory lockedForDuration = _calculateLockedForDuration();
 
         uint256 _totalBoosted;
         for (uint256 i = 0; i < 24; i++) {
-            // console.log("lockedForDuration", lockedForDuration[i]);
             _totalBoosted += lockedForDuration[i] * monthToBoost[i];
         }
 
@@ -197,7 +196,7 @@ contract Locking is Ownable, ReentrancyGuard {
 
     this allows us to calculate the total boost, as if we were re-locking these amounts, each element to its respective duration
     */
-    function _calculateLockedForDuration() public returns (uint256[24] memory lockedForDuration) {
+    function _calculateLockedForDuration() private view returns (uint256[24] memory lockedForDuration) {
         // get the current period index
         uint256 currentPeriodIndex = currentMonthIndex();
         // get the index to the period in 24 months (maximum lock duration)
@@ -218,13 +217,6 @@ contract Locking is Ownable, ReentrancyGuard {
 
     }
 
-    // user 1 - 3 months
-    // 1 month pass
-    // user 2 - 12 months
-    // 3 months pass
-
-    // month 16 - last touched, staked there for 24 months [16...15]
-    // month 24
 
     struct RewardProgram {
         uint256 rewardsPerSecond;

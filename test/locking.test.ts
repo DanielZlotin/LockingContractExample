@@ -1,9 +1,21 @@
-import { block, bn, bn18, maxUint256, parseEvents, web3, zero, zeroAddress } from "@defi.org/web3-candies";
-import { deploy, expectRevert, mineBlock, setBalance, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
+import { block, bn, bn18, maxUint256, parseEvents, web3 } from "@defi.org/web3-candies";
+import { expectRevert, setBalance } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
-import { DAY, MONTH, deployer, feeReceiver1, feeReceiver2, locking, mockToken, tokenBalance, user, withFixture, withMockTokens } from "./fixture";
-
-useChaiBigNumber();
+import {
+  DAY,
+  MONTH,
+  deployer,
+  feeReceiver1,
+  feeReceiver2,
+  locking,
+  mockToken,
+  tokenBalance,
+  user,
+  withFixture,
+  withMockTokens,
+  advanceDays,
+  advanceMonths,
+} from "./fixture";
 
 describe("locking", () => {
   beforeEach(async () => withFixture());
@@ -71,7 +83,7 @@ describe("locking", () => {
       const durationSeconds = 3 * MONTH;
       await locking.methods.lock(await mockToken.amount(amount), durationSeconds).send({ from: user });
       const balance1 = await locking.methods.boostedBalanceOf(user).call();
-      await mineBlock(7 * DAY);
+      await advanceDays(7);
       const balance2 = await locking.methods.boostedBalanceOf(user).call();
       expect(balance2).bignumber.lt(balance1);
     });
@@ -100,7 +112,7 @@ describe("locking", () => {
 
     it("withdraw all of the amount after the lock has elapsed", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 6 * MONTH).send({ from: user });
-      await mineBlock(6 * MONTH);
+      await advanceMonths(6);
       await locking.methods.withdraw().send({ from: user });
       const balance = await tokenBalance(user);
       expect(balance).bignumber.closeTo(bn18(amount), 1e18);
@@ -147,7 +159,7 @@ describe("locking", () => {
 
     it("early full withdrawal deletes the lock", async () => {
       await locking.methods.lock(await mockToken.amount(amount / 2), MONTH * 24).send({ from: user });
-      await mineBlock(MONTH);
+      await advanceMonths(1);
       await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user });
       expect((await locking.methods.lockedBalanceOf(user).call()).deadline).bignumber.zero;
 
@@ -212,7 +224,7 @@ describe("locking", () => {
 
       it("Withdraw", async () => {
         await locking.methods.lock(await mockToken.amount(amount), MONTH).send({ from: user });
-        await mineBlock(MONTH);
+        await advanceMonths(1);
         const tx = await locking.methods.withdraw().send({ from: user });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("Withdraw");

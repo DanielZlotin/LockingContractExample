@@ -1,8 +1,10 @@
-import { Token, account, bn18, erc20 } from "@defi.org/web3-candies";
-import { deployArtifact, tag } from "@defi.org/web3-candies/dist/hardhat";
+import { Token, account, bn18, erc20, BlockInfo } from "@defi.org/web3-candies";
+import { deployArtifact, mineBlock, tag, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
 import type { Locking, MockERC20 } from "../typechain-hardhat/contracts";
 import BN from "bignumber.js";
+
+useChaiBigNumber();
 
 export let deployer: string;
 export let user: string;
@@ -24,9 +26,9 @@ export async function withFixture() {
   user = await account(0);
   feeReceiver1 = await account(1);
   feeReceiver2 = await account(2);
-  userTwo = await account(3)
+  userTwo = await account(3);
   tag(user, "user");
-  tag(userTwo, "userTwo")
+  tag(userTwo, "userTwo");
   tag(deployer, "deployer");
   tag(feeReceiver1, "feeReceiver1");
   tag(feeReceiver2, "feeReceiver2");
@@ -48,4 +50,12 @@ export async function withMockTokens(amount: BN.Value) {
 
 export async function tokenBalance(address: string) {
   return BN(await mockToken.methods.balanceOf(address).call());
+}
+
+export function advanceDays(days: number): Promise<BlockInfo> {
+  return mineBlock(days * DAY);
+}
+
+export function advanceMonths(months: number): Promise<BlockInfo> {
+  return mineBlock(months * MONTH);
 }
