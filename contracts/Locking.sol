@@ -16,7 +16,6 @@ contract Locking is Ownable, ReentrancyGuard {
     IERC20 public token; // FoT is NOT supported
     mapping(address => Lock) public locks;
     uint256 public totalLocked = 0;
-    uint256 public _currentMonthIndex = 0;
 
     uint256 public constant PRECISION = 10000;
     uint256 public exponent; // based on PERCISION
@@ -86,14 +85,6 @@ contract Locking is Ownable, ReentrancyGuard {
         return uint256((block.timestamp - deployTime) / 30 days);
     }
 
-    function updateCurrentMonthIndex() internal {
-        uint256 _calculatedCurMonthIndex = currentMonthIndex();
-
-        if (_calculatedCurMonthIndex != _currentMonthIndex) {        
-            _currentMonthIndex = _calculatedCurMonthIndex;
-        }
-    }
-
     /**
      * Create or increase lock, sending {amount} of {token} to this contract, and locking it for {durationSeconds} from now.
      * Assumes {amount} allowance given to this contract.
@@ -101,16 +92,16 @@ contract Locking is Ownable, ReentrancyGuard {
      */
     function lock(uint256 amount, uint256 durationSeconds) external nonReentrant {
         require(amount > 0 || durationSeconds > 0, "Locking:lock:params");
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
 
         if (locks[msg.sender].deadline == 0) locks[msg.sender].deadline = block.timestamp;
         locks[msg.sender].amount += amount;
         locks[msg.sender].deadline += durationSeconds;
         totalLocked += amount;
+
+        uint256 _currentMonthIndex = currentMonthIndex();
         
         uint256 durationMonths = durationSeconds / 30 days;
-
-        updateCurrentMonthIndex();
 
         for (uint256 i = 0; i < durationMonths; i++) {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
@@ -199,22 +190,14 @@ contract Locking is Ownable, ReentrancyGuard {
     function _calculateLockedForDuration() private view returns (uint256[24] memory lockedForDuration) {
         // get the current period index
         uint256 currentPeriodIndex = currentMonthIndex();
-        // get the index to the period in 24 months (maximum lock duration)
-        uint256 i = currentPeriodIndex + 23;
-        // we need to store the most recent amount locked at the end of the array
-        uint256 shittyCounter = 23;
         // variable to store the diff between the last different amount period and this one
         uint256 lastSeenAmount = 0;
         // iterate backwards over the previous 24 months, and return the amount locked for each month
-        while (currentPeriodIndex != i) {
-            lockedForDuration[shittyCounter] = lockedPerMonth[i] - lastSeenAmount;
-            lastSeenAmount = lockedPerMonth[i];
-            i -= 1; // TODO fix somehow such that the -1 comes before 24?
-            shittyCounter -= 1;
+        for (int256 i = 23; i >= 0; i--) {
+            uint256 _i = uint256(i);
+            lockedForDuration[_i] = lockedPerMonth[currentPeriodIndex + _i] - lastSeenAmount;
+            lastSeenAmount = lockedPerMonth[currentPeriodIndex + _i];
         }
-        // TODO: refactor this 
-        lockedForDuration[0] = lockedPerMonth[i] - lastSeenAmount;
-
     }
 
 
