@@ -32,6 +32,8 @@ import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 /// MODIFICATIONS
 /// - Add ERC20Vote functioans
 
+import "hardhat/console.sol";
+
 contract VotingEscrow is IVotingEscrow, IVotes, ReentrancyGuard {
     using SafeERC20 for IERC20;
     // Shared Events
@@ -257,6 +259,11 @@ contract VotingEscrow is IVotingEscrow, IVotes, ReentrancyGuard {
                     int128(int256(_oldLocked.end - block.timestamp));
             }
             if (_newLocked.end > block.timestamp && _newLocked.delegated > 0) {
+                console.log("------------------");
+                console.log("_newLocked.delegated");
+                console.logInt(_newLocked.delegated);
+                console.log("int128(int256(MAXTIME))");
+                console.logInt(int128(int256(MAXTIME)));
                 userNewPoint.slope =
                     _newLocked.delegated /
                     int128(int256(MAXTIME));

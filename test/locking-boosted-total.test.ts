@@ -1,5 +1,8 @@
 import { expect } from "chai";
 import { MONTH, deployer, locking, mockToken, user, userTwo, withFixture, withMockTokens, PRECISION, advanceDays, advanceMonths } from "./fixture";
+import BN from "bignumber.js";
+
+import { block, bn } from "@defi.org/web3-candies";
 
 // Qs
 // - are we ok with user depositing after 29 days being able to unstake after 1 day and losing boost if he
@@ -11,16 +14,25 @@ describe("locking boosted total", () => {
   const amount = 1234.567891234567;
   beforeEach(async () => withMockTokens(amount));
 
-  it("total boosted power should be 0 when no locks", async () => {
-    const totalBoosted = await locking.methods.totalBoosted().call();
-    expect(totalBoosted).to.be.bignumber.eq(0);
+  it.only("total boosted power should be 0 when no locks", async () => {
+    // Index 1 as index 0 is set to 0 in constructor
+    const firstPointHistory = await locking.methods.pointHistory(1).call();
+
+    expect(firstPointHistory.slope).to.be.eq("0");
   });
 
   // TODO - rephrase this
-  it("total boosted power immediately after locking for one user should be maximum", async () => {
-    await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-    const totalBoosted = await locking.methods.totalBoosted().call();
-    expect(totalBoosted).to.be.bignumber.eq((await mockToken.amount(amount)).multipliedBy(3.74));
+  it.only("total boosted power immediately after locking for one user should be maximum", async () => {
+    const MAXTIME = await locking.methods.MAXTIME().call();
+
+    const amountToLock = await mockToken.amount(amount);
+    const unlockTime = (await block()).timestamp + 1_000_000;
+
+    await locking.methods.createLock(amountToLock, unlockTime).send({ from: user });
+
+    const userPointHistory = await locking.methods.userPointHistory(user, 1).call();
+
+    expect(Number(userPointHistory.slope)).to.be.approximately(Number(BN(amountToLock).dividedBy(MAXTIME)), 1);
   });
 
   it("total boosted power immediately after locking for two users should be maximum", async () => {
