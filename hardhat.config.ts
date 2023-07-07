@@ -7,20 +7,23 @@ import "hardhat-tracer";
 import { hardhatDefaultConfig } from "@defi.org/web3-candies/dist/hardhat";
 import _ from "lodash";
 import "hardhat-watcher";
+import "@nomiclabs/hardhat-vyper";
 
 task("foo", async () => {});
 
 export default _.merge(hardhatDefaultConfig(), {
   networks: {
-    hardhat: {
-    },
+    hardhat: {},
   },
   mocha: {
     bail: false,
   },
   watcher: {
     test: {
-      tasks: ['test'],
+      tasks: ["test"],
     },
+  },
+  vyper: {
+    version: "0.2.4",
   },
 } as HardhatUserConfig);
