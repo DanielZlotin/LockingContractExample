@@ -161,7 +161,7 @@ contract Locking is Ownable, ReentrancyGuard {
         amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
     }
 
-    function totalBoosted() external view returns (uint256) {
+    function totalBoosted() public view returns (uint256) {
         // TODO do we return stored or calculated??
 
         uint256[24] memory lockedForDuration = _calculateLockedForDuration();
@@ -202,28 +202,55 @@ contract Locking is Ownable, ReentrancyGuard {
 
 
     struct RewardProgram {
-        uint256 rewardsPerSecond;
-        uint256 lastRewardTimestamp; // Last time reward has been claimed
+        // uint256 rewardsPerSecond;
+        // uint256 lastRewardTimestamp; // Last time reward has been claimed
+        uint256 startMonth;
+        uint256 endMonth;
+        uint256 totalRewards;
     }
 
     mapping(address => RewardProgram) public rewards;
 
-    function pendingRewards(address target, address token) external view returns (uint256) {
-        RewardProgram memory rewardProgram = rewards[token];
-        uint256 _boostedBalanceOf = boostedBalanceOf(target);
-        uint256 _seconds = block.timestamp - rewardProgram.lastRewardTimestamp;
-        uint256 rewards = _seconds * rewardProgram.rewardsPerSecond;
-        return rewards;
+    function pendingRewards(address target, address _token) external view returns (uint256) {
+        RewardProgram memory rewardProgram = rewards[_token];
+
+        Lock memory targetLock = locks[target];
+        uint256 monthsLeft = (targetLock.deadline - block.timestamp) / 30 days;
+        uint256 targetShare = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
+        uint256 totalRewardsDue = rewardProgram.totalRewards * (currentMonthIndex() - rewardProgram.startMonth) / (rewardProgram.endMonth + 1 - rewardProgram.startMonth);
+        
+
+        /*
+
+        
+
+        ---
+
+        Rewards program is 50k [3....8]
+        Positions goes from [1...5]
+
+        user checks at 7:
+            - user's boosted position @ 7
+            - total boost at @ 7
+            - ratio => user's share of the pie
+            - userClaimSoFar
+
+        */
+
+        console.log("targetShare", targetShare / 1e18);
+        console.log("monthsLeft", monthsLeft);
+        console.log("totalBoosted", totalBoosted() / 1e18);
+
+        return (totalRewardsDue * targetShare) / totalBoosted();
     }
 
     /**************************************
      * Admin functions
      **************************************/
 
-    function addReward(uint256 amount, address token, uint256 rewardsPerSecond) external onlyOwner {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        rewards[token].rewardsPerSecond = rewardsPerSecond;
-        rewards[token].lastRewardTimestamp = block.timestamp;
+    function addReward(address _token, RewardProgram calldata reward) external onlyOwner {
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), reward.totalRewards);
+        rewards[_token] = reward;
     }
 
     function setExponent(uint256 _exponent) external onlyOwner {
