@@ -3,7 +3,7 @@ import { block, bn18 } from "@defi.org/web3-candies";
 import { expect } from "chai";
 import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
 
-describe.only("Rewards", () => {
+describe("Rewards", () => {
   beforeEach(async () => withFixture());
 
   describe("with tokens", () => {
@@ -23,15 +23,15 @@ describe.only("Rewards", () => {
       // 50K tokens
       // Rate is 25K tokens per month
 
-      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
       await advanceMonths(1);
       const pendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
       expect(pendingRewards).bignumber.closeTo(bn18(10_000), bn18(1));
     });
 
     it("two users, same balance, same period", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: userTwo });
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: userTwo });
 
       await advanceMonths(1);
 
@@ -43,8 +43,8 @@ describe.only("Rewards", () => {
     });
 
     it("two users, difference balance, same period", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 3 * MONTH).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount / 2), 3 * MONTH).send({ from: userTwo });
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount / 2), 3).send({ from: userTwo });
 
       await advanceMonths(1);
 
@@ -56,8 +56,8 @@ describe.only("Rewards", () => {
     });
 
     it("two users, same balance, different period, same rate for decay", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 24 * MONTH).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount), 12 * MONTH).send({ from: userTwo });
+      await locking.methods.lock(await mockToken.amount(amount), 24).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount), 12).send({ from: userTwo });
 
       await advanceMonths(1);
 
@@ -69,8 +69,8 @@ describe.only("Rewards", () => {
     });
     
     it("two users, same balance, different period, decay", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 7 * MONTH).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount), 4 * MONTH).send({ from: userTwo });
+      await locking.methods.lock(await mockToken.amount(amount), 7).send({ from: user });
+      await locking.methods.lock(await mockToken.amount(amount), 4).send({ from: userTwo });
 
       await advanceMonths(1);
 
@@ -80,6 +80,8 @@ describe.only("Rewards", () => {
       expect(userOnePendingRewards).bignumber.closeTo(bn18(6_966), 1e18);
       expect(userTwoPendingRewards).bignumber.closeTo(bn18(3_034), 1e18);
     });
+
+
 
     // TODO: write test that checks when more than 50K rewards have been allocated
   });

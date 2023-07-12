@@ -5,13 +5,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./ABDKMath64x64.sol";
 import "hardhat/console.sol";
 
 
 contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-    using ABDKMath64x64 for int128;
 
     IERC20 public token; // FoT is NOT supported
     mapping(address => Lock) public locks;
@@ -29,12 +27,13 @@ contract Locking is Ownable, ReentrancyGuard {
 
     struct Lock {
         uint256 amount;
-        uint256 deadline;
+        uint256 startMonth;
+        uint256 endMonth;
     }
 
     uint256 deployTime;
 
-    event Locked(address indexed target, uint256 amount, uint256 deadline);
+    event Locked(address indexed target, uint256 amount, uint256 startMonth, uint256 endMonth);
     event Withdraw(address indexed target, uint256 amount);
     event WithdrawWithPenalty(address indexed target, uint256 amount, uint256 penalty);
 
@@ -90,28 +89,26 @@ contract Locking is Ownable, ReentrancyGuard {
      * Assumes {amount} allowance given to this contract.
      * Emits Locked.
      */
-    function lock(uint256 amount, uint256 durationSeconds) external nonReentrant {
-        require(amount > 0 || durationSeconds > 0, "Locking:lock:params");
+    function lock(uint256 amount, uint256 monthsToLock) external nonReentrant {
+        require(amount > 0 || monthsToLock > 0, "Locking:lock:params");
         token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
 
-        if (locks[msg.sender].deadline == 0) locks[msg.sender].deadline = block.timestamp;
+        locks[msg.sender].startMonth = currentMonthIndex();
+        locks[msg.sender].endMonth = locks[msg.sender].startMonth + monthsToLock;
         locks[msg.sender].amount += amount;
-        locks[msg.sender].deadline += durationSeconds;
         totalLocked += amount;
 
         uint256 _currentMonthIndex = currentMonthIndex();
         
-        uint256 durationMonths = durationSeconds / 30 days;
-
-        for (uint256 i = 0; i < durationMonths; i++) {
+        for (uint256 i = 0; i < monthsToLock; i++) {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
         }
 
-        emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].deadline);
+        emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
     }
 
     function withdraw() external nonReentrant {
-        require(locks[msg.sender].deadline < block.timestamp, "Locking:withdraw:deadline");
+        require(locks[msg.sender].endMonth <= currentMonthIndex(), "Locking:withdraw:endMonth");
         uint256 amount = locks[msg.sender].amount;
         delete locks[msg.sender];
         totalLocked -= amount;
@@ -140,26 +137,6 @@ contract Locking is Ownable, ReentrancyGuard {
     /**************************************
      * View functions
      **************************************/
-
-    /**
-     * _exponent 12000 is 1.2% exponent on locked months
-     * returns ratio based on {PRECISION}
-     */
-    function calcPowerRatio(uint256 _exponent, uint256 remainingSeconds) public pure returns (uint256 power) {
-        if (remainingSeconds == 0) return 0;
-        int128 factor = ABDKMath64x64.divu(_exponent, PRECISION);
-        int128 months = ABDKMath64x64.divu(remainingSeconds, 30 days);
-        power = months.log_2().mul(factor).exp_2().mulu(PRECISION);
-    }
-
-    function lockedBalanceOf(address target) external view returns (uint256 amount, uint256 deadline) {
-        amount = locks[target].amount;
-        deadline = locks[target].deadline;
-    }
-
-    function boostedBalanceOf(address target) public view returns (uint256 amount) {
-        amount = (locks[target].amount * calcPowerRatio(exponent, locks[target].deadline - block.timestamp)) / PRECISION;
-    }
 
     function totalBoosted() public view returns (uint256) {
         // TODO do we return stored or calculated??
@@ -215,9 +192,9 @@ contract Locking is Ownable, ReentrancyGuard {
         RewardProgram memory rewardProgram = rewards[_token];
 
         Lock memory targetLock = locks[target];
-        uint256 monthsLeft = (targetLock.deadline - block.timestamp) / 30 days;
+        uint256 monthsLeft = targetLock.endMonth - currentMonthIndex();
         uint256 targetShare = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-        uint256 totalRewardsDue = rewardProgram.totalRewards * (currentMonthIndex() - rewardProgram.startMonth) / (rewardProgram.endMonth + 1 - rewardProgram.startMonth);
+        uint256 totalRewardsDue = rewardProgram.totalRewards * (currentMonthIndex() - rewardProgram.startMonth) / (rewardProgram.endMonth - rewardProgram.startMonth);
         
 
         /*
