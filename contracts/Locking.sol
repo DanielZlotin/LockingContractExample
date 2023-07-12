@@ -4,6 +4,7 @@ pragma solidity 0.8.18;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
@@ -141,7 +142,20 @@ contract Locking is Ownable, ReentrancyGuard {
     function totalBoosted() public view returns (uint256) {
         // TODO do we return stored or calculated??
 
-        uint256[24] memory lockedForDuration = _calculateLockedForDuration();
+        uint256[24] memory lockedForDuration = _calculateLockedForDuration(currentMonthIndex());
+
+        uint256 _totalBoosted;
+        for (uint256 i = 0; i < 24; i++) {
+            _totalBoosted += lockedForDuration[i] * monthToBoost[i];
+        }
+
+        return _totalBoosted / PRECISION;
+    }
+    
+    function totalBoostedAt(uint256 month) public view returns (uint256) {
+        // TODO do we return stored or calculated??
+
+        uint256[24] memory lockedForDuration = _calculateLockedForDuration(month);
 
         uint256 _totalBoosted;
         for (uint256 i = 0; i < 24; i++) {
@@ -164,9 +178,9 @@ contract Locking is Ownable, ReentrancyGuard {
 
     this allows us to calculate the total boost, as if we were re-locking these amounts, each element to its respective duration
     */
-    function _calculateLockedForDuration() private view returns (uint256[24] memory lockedForDuration) {
+    function _calculateLockedForDuration(uint256 month) private view returns (uint256[24] memory lockedForDuration) {
         // get the current period index
-        uint256 currentPeriodIndex = currentMonthIndex();
+        uint256 currentPeriodIndex = month;
         // variable to store the diff between the last different amount period and this one
         uint256 lastSeenAmount = 0;
         // iterate backwards over the previous 24 months, and return the amount locked for each month
@@ -192,11 +206,20 @@ contract Locking is Ownable, ReentrancyGuard {
         RewardProgram memory rewardProgram = rewards[_token];
 
         Lock memory targetLock = locks[target];
-        uint256 monthsLeft = targetLock.endMonth - currentMonthIndex();
-        uint256 targetShare = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-        uint256 totalRewardsDue = rewardProgram.totalRewards * (currentMonthIndex() - rewardProgram.startMonth) / (rewardProgram.endMonth - rewardProgram.startMonth);
-        
-        return (totalRewardsDue * targetShare) / totalBoosted();
+        uint256 totalRewardsPerMonth = rewardProgram.totalRewards  / (rewardProgram.endMonth - rewardProgram.startMonth);
+
+        uint256 monthFrom = Math.max(rewardProgram.startMonth, targetLock.startMonth);
+        uint256 monthTo = Math.min(Math.min(rewardProgram.endMonth, currentMonthIndex()), targetLock.endMonth);
+
+        uint256 _pendingRewards = 0;
+
+        for (uint256 i = monthFrom; i < monthTo; i++) {
+            uint256 monthsLeft = targetLock.endMonth - i;
+            uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
+            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostedAt(i); // todo pass i
+        }
+
+        return _pendingRewards;
     }
 
     /**************************************

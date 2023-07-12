@@ -70,15 +70,15 @@ describe.only("Rewards", () => {
     
     it("two users, same balance, different period, decay", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 7).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount), 4).send({ from: userTwo });
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: userTwo });
 
       await advanceMonths(1);
 
       const userOnePendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
       const userTwoPendingRewards = await locking.methods.pendingRewards(userTwo, rewardToken.options.address).call();
 
-      expect(userOnePendingRewards).bignumber.closeTo(bn18(6_966), 1e18);
-      expect(userTwoPendingRewards).bignumber.closeTo(bn18(3_034), 1e18);
+      expect(userOnePendingRewards).bignumber.closeTo(bn18(8_406), 1e18);
+      expect(userTwoPendingRewards).bignumber.closeTo(bn18(1_594), 1e18);
     });
 
 
