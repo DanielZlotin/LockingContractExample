@@ -213,6 +213,12 @@ contract Locking is Ownable, ReentrancyGuard {
 
         uint256 _pendingRewards = 0;
 
+        /*
+        already claimed tests
+        add more lock positions "in the middle"
+        
+        */
+
         for (uint256 i = monthFrom; i < monthTo; i++) {
             uint256 monthsLeft = targetLock.endMonth - i;
             uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
