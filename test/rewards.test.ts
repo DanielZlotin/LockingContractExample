@@ -12,7 +12,7 @@ describe("Rewards", () => {
     beforeEach(async () => {
       await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(50_000)).send({ from: deployer });
       // 50000 / (60 * 86400) = 0.00964506
-      await locking.methods.addReward(rewardToken.options.address, [0, 4, (await rewardToken.amount(50_000)).toFixed(0)]).send({ from: deployer });
+      await locking.methods.addReward(rewardToken.options.address, [0, 5, (await rewardToken.amount(50_000)).toFixed(0)]).send({ from: deployer });
     });
 
     it("user should have reward if did stake and didn't claim so far", async () => {
