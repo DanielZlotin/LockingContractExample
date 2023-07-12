@@ -3,7 +3,7 @@ import { block, bn18 } from "@defi.org/web3-candies";
 import { expect } from "chai";
 import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
 
-describe("Rewards", () => {
+describe.only("Rewards", () => {
   beforeEach(async () => withFixture());
 
   describe("with tokens", () => {

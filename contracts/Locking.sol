@@ -196,28 +196,6 @@ contract Locking is Ownable, ReentrancyGuard {
         uint256 targetShare = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
         uint256 totalRewardsDue = rewardProgram.totalRewards * (currentMonthIndex() - rewardProgram.startMonth) / (rewardProgram.endMonth - rewardProgram.startMonth);
         
-
-        /*
-
-        
-
-        ---
-
-        Rewards program is 50k [3....8]
-        Positions goes from [1...5]
-
-        user checks at 7:
-            - user's boosted position @ 7
-            - total boost at @ 7
-            - ratio => user's share of the pie
-            - userClaimSoFar
-
-        */
-
-        console.log("targetShare", targetShare / 1e18);
-        console.log("monthsLeft", monthsLeft);
-        console.log("totalBoosted", totalBoosted() / 1e18);
-
         return (totalRewardsDue * targetShare) / totalBoosted();
     }
 
