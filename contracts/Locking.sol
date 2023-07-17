@@ -200,6 +200,9 @@ contract Locking is Ownable, ReentrancyGuard {
         // iterate backwards over the previous 24 months, and return the amount locked for each month
         for (int256 i = 23; i >= 0; i--) {
             uint256 _i = uint256(i);
+            console.log("currentPeriodIndex + _i: %s", currentPeriodIndex + _i);
+            console.log("lockedPerMonth[currentPeriodIndex + _i]: %s", lockedPerMonth[currentPeriodIndex + _i]);
+            console.log("lastSeenAmount: %s", lastSeenAmount);
             lockedForDuration[_i] = lockedPerMonth[currentPeriodIndex + _i] - lastSeenAmount;
             lastSeenAmount = lockedPerMonth[currentPeriodIndex + _i];
         }
@@ -221,6 +224,31 @@ contract Locking is Ownable, ReentrancyGuard {
         add more lock positions "in the middle"
         
         */
+
+       /*
+
+        // totalBoostedAt(0) = 123 * 3.74
+        // totalBoostedAt(1) = 123 * 3.74
+        // totalBoostedAt(2) = 123 * 1
+        M0: 123
+        M1: 123
+        M2: 123
+
+        // One month has passed and there has been another lock
+
+        // totalBoostedAt(0) = 123 * 3.74
+        // totalBoostedAt(1) = 
+        // totalBoostedAt(2) = 
+        // totalBoostedAt(3) = 
+        // [Queried window is 0-2]
+          M0: 123
+        ------
+        > M1: 223 (100+123)
+          M2: 223 (100+123)
+          M3: 100
+        
+
+       */
 
         for (uint256 i = monthFrom; i < monthTo; i++) {
             uint256 monthsLeft = targetLock.endMonth - i;

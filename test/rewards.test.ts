@@ -123,6 +123,17 @@ describe.only("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
     });
 
+    it.only("two user locks different periods, claim at the end of the program", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await advanceMonths(1);
+      await locking.methods.lock(await mockToken.amount(amount), 4).send({ from: userTwo });
+      await advanceMonths(4);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(20_000), 1e18);
+      // await locking.methods.claim(user, rewardToken.options.address).send({ from: userTwo });
+      // expect(await rewardToken.methods.balanceOf(userTwo).call()).bignumber.closeTo(bn18(30_000), 1e18);
+    });
+
     // TODO: test for pending rewards, where two users lock at different times, with different boosts and are eligible for different shares of the reward program
 
     // TODO: testcase to check pending before advancing a month
