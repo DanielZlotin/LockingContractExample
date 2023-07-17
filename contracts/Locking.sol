@@ -25,6 +25,10 @@ contract Locking is Ownable, ReentrancyGuard {
     mapping(uint256 => uint256) public monthToBoost;
     mapping(uint256 => uint256) public lockedPerMonth;
 
+    uint256 _currentMonthIndexStored = 0;
+
+    mapping(uint256 => uint256) public totalBoostHistory;
+
     struct Lock {
         uint256 amount;
         uint256 startMonth;
@@ -100,14 +104,18 @@ contract Locking is Ownable, ReentrancyGuard {
      */
     function lock(uint256 amount, uint256 monthsToLock) external nonReentrant {
         require(amount > 0 || monthsToLock > 0, "Locking:lock:params");
-        token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
 
-        locks[msg.sender].startMonth = currentMonthIndex();
+        checkpoint();
+
+        token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
+        
+        uint256 _currentMonthIndex = currentMonthIndex();
+
+        locks[msg.sender].startMonth = _currentMonthIndex;
         locks[msg.sender].endMonth = locks[msg.sender].startMonth + monthsToLock;
         locks[msg.sender].amount += amount;
         totalLocked += amount;
 
-        uint256 _currentMonthIndex = currentMonthIndex();
         
         for (uint256 i = 0; i < monthsToLock; i++) {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
@@ -160,7 +168,7 @@ contract Locking is Ownable, ReentrancyGuard {
         return _totalBoosted / PRECISION;
     }
     
-    function totalBoostedAt(uint256 month) public view returns (uint256) {
+    function totalBoostedAt(uint256 month) private view returns (uint256) {
         // TODO do we return stored or calculated??
 
         uint256[24] memory lockedForDuration = _calculateLockedForDuration(month);
@@ -174,6 +182,7 @@ contract Locking is Ownable, ReentrancyGuard {
     }
     
     function claim(address user, address rewardToken) external {
+        checkpoint();
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         IERC20(rewardToken).safeTransfer(user, _pendingRewards);
@@ -200,15 +209,31 @@ contract Locking is Ownable, ReentrancyGuard {
         // iterate backwards over the previous 24 months, and return the amount locked for each month
         for (int256 i = 23; i >= 0; i--) {
             uint256 _i = uint256(i);
-            console.log("currentPeriodIndex + _i: %s", currentPeriodIndex + _i);
-            console.log("lockedPerMonth[currentPeriodIndex + _i]: %s", lockedPerMonth[currentPeriodIndex + _i]);
-            console.log("lastSeenAmount: %s", lastSeenAmount);
             lockedForDuration[_i] = lockedPerMonth[currentPeriodIndex + _i] - lastSeenAmount;
             lastSeenAmount = lockedPerMonth[currentPeriodIndex + _i];
         }
     }
+    
 
-    function pendingRewards(address target, address _token) public view returns (uint256) {
+    function checkpoint() public {
+        uint256 _currentMonthIndex = currentMonthIndex();
+
+        if (_currentMonthIndexStored == _currentMonthIndex) {
+            return;
+        }
+
+        for (uint256 i = _currentMonthIndexStored; i < _currentMonthIndex; i++) {
+            totalBoostHistory[i] = totalBoostedAt(i);
+        }
+        _currentMonthIndexStored = currentMonthIndex();
+    }
+
+
+
+
+    function pendingRewards(address target, address _token) public returns (uint256) {
+        checkpoint();
+
         RewardProgram memory rewardProgram = rewards[_token];
 
         Lock memory targetLock = locks[target];
@@ -253,7 +278,7 @@ contract Locking is Ownable, ReentrancyGuard {
         for (uint256 i = monthFrom; i < monthTo; i++) {
             uint256 monthsLeft = targetLock.endMonth - i;
             uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostedAt(i); // todo pass i
+            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostHistory[i]; // todo pass i
         }
 
         return _pendingRewards - claimedRewards[target][_token];
