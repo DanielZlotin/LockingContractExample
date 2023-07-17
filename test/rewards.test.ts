@@ -1,7 +1,7 @@
 import { block, bn18 } from "@defi.org/web3-candies";
-
 import { expect } from "chai";
 import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
+import BN from "bignumber.js";
 
 describe.only("Rewards", () => {
   beforeEach(async () => withFixture());
@@ -67,7 +67,7 @@ describe.only("Rewards", () => {
       expect(userOnePendingRewards).bignumber.closeTo(bn18(6_966), 1e18);
       expect(userTwoPendingRewards).bignumber.closeTo(bn18(3_034), 1e18);
     });
-    
+
     it("two users, same balance, different period, decay", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 7).send({ from: user });
       await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: userTwo });
@@ -81,8 +81,58 @@ describe.only("Rewards", () => {
       expect(userTwoPendingRewards).bignumber.closeTo(bn18(1_594), 1e18);
     });
 
+    it("one user locks one month after reward was added, total 2 months passed", async () => {
+      await advanceMonths(1);
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await advanceMonths(1);
+      const pendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
+      expect(pendingRewards).bignumber.closeTo(bn18(10_000), 1e18);
+    });
 
+    it("one user locks one month after reward was added, reward program ended, rewards are orphaned", async () => {
+      await advanceMonths(1);
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await advanceMonths(4);
+      const pendingRewards = await locking.methods.pendingRewards(user, rewardToken.options.address).call();
+      expect(pendingRewards).bignumber.closeTo(bn18(30_000), 1e18);
+      // note that 10K got stuck at the beginning of the program, and another 10K got stuck at the end
+      const rewardTokenBalance = BN(await rewardToken.methods.balanceOf(locking.options.address).call());
+      expect(rewardTokenBalance.minus(pendingRewards)).bignumber.closeTo(bn18(20_000), 1e18);
+      // TODO: uncomment below when we have addded claim functionality
+      // expect(await rewardToken.methods.balanceOf(locking.options.address).call()).bignumber.closeTo(bn18(20_000), 1e18);
+    });
+
+    it("one user locks for three months, claims after 1 month", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.zero;
+      await advanceMonths(1);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
+    });
+
+    it("one user locks for three months, claims after 1 month, shouldn't be able to claim again", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.zero;
+      await advanceMonths(1);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
+
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
+    });
+
+    // TODO: test for pending rewards, where two users lock at different times, with different boosts and are eligible for different shares of the reward program
+
+    // TODO: testcase to check pending before advancing a month
 
     // TODO: write test that checks when more than 50K rewards have been allocated
+
+    // TODO: consider the case user locks at day 29 and is eligible for a month-worth of rewards
+
+    // TODO: add a claimBack reward function for each historical month that had totalBoostedSupply of 0
+
+    // TODO: how can reward programs be extended / modified?
   });
 });

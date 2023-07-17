@@ -23,8 +23,7 @@ contract Locking is Ownable, ReentrancyGuard {
     address public immutable feeReceiver2; // 50% of penalties
 
     mapping(uint256 => uint256) public monthToBoost;
-    // TODO: address compiler warning
-    uint256[100000000000000000000000000000] public lockedPerMonth;
+    mapping(uint256 => uint256) public lockedPerMonth;
 
     struct Lock {
         uint256 amount;
@@ -33,6 +32,15 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     uint256 deployTime;
+
+    struct RewardProgram {
+        uint256 startMonth;
+        uint256 endMonth;
+        uint256 totalRewards;
+    }
+
+    mapping(address => RewardProgram) public rewards;
+    mapping(address => mapping(address => uint256)) public claimedRewards;
 
     event Locked(address indexed target, uint256 amount, uint256 startMonth, uint256 endMonth);
     event Withdraw(address indexed target, uint256 amount);
@@ -164,6 +172,12 @@ contract Locking is Ownable, ReentrancyGuard {
 
         return _totalBoosted / PRECISION;
     }
+    
+    function claim(address user, address rewardToken) external {
+        uint256 _pendingRewards = pendingRewards(user, rewardToken);
+        claimedRewards[user][rewardToken] += _pendingRewards;
+        IERC20(rewardToken).safeTransfer(user, _pendingRewards);
+    }
 
 
     /*
@@ -191,18 +205,7 @@ contract Locking is Ownable, ReentrancyGuard {
         }
     }
 
-
-    struct RewardProgram {
-        // uint256 rewardsPerSecond;
-        // uint256 lastRewardTimestamp; // Last time reward has been claimed
-        uint256 startMonth;
-        uint256 endMonth;
-        uint256 totalRewards;
-    }
-
-    mapping(address => RewardProgram) public rewards;
-
-    function pendingRewards(address target, address _token) external view returns (uint256) {
+    function pendingRewards(address target, address _token) public view returns (uint256) {
         RewardProgram memory rewardProgram = rewards[_token];
 
         Lock memory targetLock = locks[target];
@@ -225,7 +228,7 @@ contract Locking is Ownable, ReentrancyGuard {
             _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostedAt(i); // todo pass i
         }
 
-        return _pendingRewards;
+        return _pendingRewards - claimedRewards[target][_token];
     }
 
     /**************************************
