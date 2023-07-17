@@ -3,7 +3,7 @@ import { expect } from "chai";
 import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
 import BN from "bignumber.js";
 
-describe.only("Rewards", () => {
+describe("Rewards", () => {
   beforeEach(async () => withFixture());
 
   describe("with tokens", () => {

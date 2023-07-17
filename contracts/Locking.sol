@@ -170,6 +170,10 @@ contract Locking is Ownable, ReentrancyGuard {
     
     function totalBoostedAt(uint256 month) private view returns (uint256) {
         // TODO do we return stored or calculated??
+    
+        if (month < _currentMonthIndexStored) {
+            return totalBoostHistory[month];
+        }
 
         uint256[24] memory lockedForDuration = _calculateLockedForDuration(month);
 
@@ -213,6 +217,8 @@ contract Locking is Ownable, ReentrancyGuard {
             lastSeenAmount = lockedPerMonth[currentPeriodIndex + _i];
         }
     }
+
+    
     
 
     function checkpoint() public {
@@ -229,10 +235,15 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
 
+    // perstitedTotalBoostHistory => [100, 101,...]
+    // _totalBoostHistoryUpdates =>  [102, 103,...] 
+    // claim -> calls checkpoint -> loops from 102 to ... and updates totalBoostHistory
 
 
-    function pendingRewards(address target, address _token) public returns (uint256) {
-        checkpoint();
+
+
+
+    function pendingRewards(address target, address _token) public view returns (uint256) {
 
         RewardProgram memory rewardProgram = rewards[_token];
 
@@ -278,7 +289,7 @@ contract Locking is Ownable, ReentrancyGuard {
         for (uint256 i = monthFrom; i < monthTo; i++) {
             uint256 monthsLeft = targetLock.endMonth - i;
             uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostHistory[i]; // todo pass i
+            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostedAt(i); // todo pass i
         }
 
         return _pendingRewards - claimedRewards[target][_token];
