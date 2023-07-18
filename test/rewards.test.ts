@@ -2,6 +2,7 @@ import { block, bn18 } from "@defi.org/web3-candies";
 import { expect } from "chai";
 import { MONTH, locking, mockToken, rewardToken, user, userTwo, withFixture, withMockTokens, deployer, advanceMonths } from "./fixture";
 import BN from "bignumber.js";
+import { expectRevert } from "@defi.org/web3-candies/dist/hardhat";
 
 describe("Rewards", () => {
   beforeEach(async () => withFixture());
@@ -143,7 +144,7 @@ describe("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
     });
 
-    it("rewards program is updateable", async () => {
+    it("rewards program is updateable, same period", async () => {
       await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(15_000)).send({ from: deployer });
       await locking.methods.addReward(rewardToken.options.address, 0, 5, (await rewardToken.amount(3_000)).toFixed(0)).send({ from: deployer });
       await locking.methods.lock(await mockToken.amount(amount), 5).send({ from: user });
@@ -152,10 +153,63 @@ describe("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(65_000), 1e18);
     });
 
+    it("rewards program is updateable, different period", async () => {
+      await advanceMonths(10);
+      await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(15_000)).send({ from: deployer });
+      await locking.methods.addReward(rewardToken.options.address, 0, 5, (await rewardToken.amount(3_000)).toFixed(0)).send({ from: deployer });
+
+      await locking.methods.lock(await mockToken.amount(amount), 5).send({ from: user });
+      await advanceMonths(5);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(15_000), 1e18);
+    });
+
+    it("rewards program is updateable, offset", async () => {
+      await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(15_000)).send({ from: deployer });
+      await locking.methods.addReward(rewardToken.options.address, 10, 5, (await rewardToken.amount(3_000)).toFixed(0)).send({ from: deployer });
+
+      await advanceMonths(10);
+      await locking.methods.lock(await mockToken.amount(amount), 5).send({ from: user });
+      await advanceMonths(5);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(15_000), 1e18);
+    });
+
+    it("rewards program can't be depleted by owner", async () => {
+      const initialBalance = await rewardToken.methods.balanceOf(deployer).call();
+      await locking.methods.lock(await mockToken.amount(amount), 5).send({ from: user });
+      await advanceMonths(6);
+      await locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer });
+      expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(initialBalance);
+    });
+
+    it("owner can only recover reward funds per month a single time", async () => {
+      const initialBalance = await rewardToken.methods.balanceOf(deployer).call();
+      await advanceMonths(6);
+      await locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer });
+      expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance).plus(await rewardToken.amount(50_000)));
+      await locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer });
+      expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance).plus(await rewardToken.amount(50_000)));
+    });
+
+    it("recover reward tokens that don't belong to the reward program", async () => {
+      await locking.methods.lock(await mockToken.amount(amount), 24).send({ from: user });
+      await rewardToken.methods.transfer(locking.options.address, await rewardToken.amount(17_000)).send({ from: deployer });
+      const balanceBefore = await rewardToken.methods.balanceOf(deployer).call();
+      await advanceMonths(1);
+      await locking.methods.recover(rewardToken.options.address, 0, 0).send({ from: deployer });
+      const balanceAfter = await rewardToken.methods.balanceOf(deployer).call();
+      expect(BN(balanceAfter).minus(balanceBefore)).bignumber.eq(await rewardToken.amount(17_000));
+    });
+
+    it("owner cannot recover funds from the future", async () => {
+      const initialBalance = await rewardToken.methods.balanceOf(deployer).call();
+      await expectRevert(() => locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer }), "Locking:recover:endMonth");
+      expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance));
+    });
+
     // TODO (product decision): consider the case user locks at day 29 and is eligible for a month-worth of rewards
 
     // TODO: add a claimBack reward function for each historical month that had totalBoostedSupply of 0
-
-    // TODO: how can reward programs be extended / modified?
   });
 });

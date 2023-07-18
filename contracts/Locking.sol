@@ -36,8 +36,11 @@ contract Locking is Ownable, ReentrancyGuard {
 
     uint256 deployTime;
 
+    // TODO refactor all requires to revert with custom errors and check gas implications
+
     // ERC20 address => month index => amount
     mapping(address => mapping(uint256 => uint256)) public rewards;
+    mapping(address => uint256) public rewardBalances;
     mapping(address => mapping(address => uint256)) public claimedRewards;
 
     event Locked(address indexed target, uint256 amount, uint256 startMonth, uint256 endMonth);
@@ -180,6 +183,7 @@ contract Locking is Ownable, ReentrancyGuard {
         checkpoint();
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
+        rewardBalances[rewardToken] -= _pendingRewards;
         IERC20(rewardToken).safeTransfer(user, _pendingRewards);
     }
 
@@ -243,6 +247,7 @@ contract Locking is Ownable, ReentrancyGuard {
      **************************************/
 
     function addReward(address _token, uint256 offset, uint256 months, uint256 amountPerMonth) external onlyOwner {
+        // TODO not necessarily owner holds the reward token
         IERC20(_token).safeTransferFrom(msg.sender, address(this), amountPerMonth * months);
 
         uint256 rewardsStartMonth = currentMonthIndex() + offset;
@@ -250,6 +255,8 @@ contract Locking is Ownable, ReentrancyGuard {
         for (uint256 i = rewardsStartMonth; i < rewardsStartMonth + months; i++) {
             rewards[_token][i] += amountPerMonth;
         }
+
+        rewardBalances[_token] += amountPerMonth * months;
     }
 
     function setExponent(uint256 _exponent) external onlyOwner {
@@ -260,9 +267,32 @@ contract Locking is Ownable, ReentrancyGuard {
         revert();
     }
 
-    function recover(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        require(tokenAddress != address(token) || tokenAmount <= token.balanceOf(address(this)) - totalLocked, "Locking:recoverERC20:locked");
-        IERC20(tokenAddress).safeTransfer(owner(), tokenAmount);
+    function recover(address tokenAddress, uint256 startMonth, uint256 endMonth) external onlyOwner {
+        // if(startMonth >= endMonth) revert InvalidArguments(startMonth);
+        require(endMonth < currentMonthIndex(), "Locking:recover:endMonth");
+        // Return any balance of the token that doesn't belong to the rewards program
+        uint256 tokenBalanceToRecover = IERC20(tokenAddress).balanceOf(address(this)) - rewardBalances[tokenAddress];
+
+        // in case of XCTD, we also need to retain the total locked amount in the contract
+        if (tokenAddress == address(token)) {
+            tokenBalanceToRecover -= totalLocked;
+        } 
+
+        // TODO: bug - claim from the future!
+        // Recover reward for any past months that had 0 locked amount
+        for (uint256 i = startMonth; i < endMonth; i++) {
+            if (totalBoostedAt(i) == 0) {
+                tokenBalanceToRecover += rewards[tokenAddress][i];
+                rewardBalances[tokenAddress] -= rewards[tokenAddress][i];
+                rewards[tokenAddress][i] = 0;
+            }
+        }
+
+        // Shouldn't happen
+        // tokenBalanceToRecover = Math.min(tokenBalanceToRecover, IERC20(tokenAddress).balanceOf(address(this)));
+
+        IERC20(tokenAddress).safeTransfer(owner(), tokenBalanceToRecover);
+        // in case of ETH, transfer the balance as well
         Address.sendValue(payable(owner()), address(this).balance);
     }
 

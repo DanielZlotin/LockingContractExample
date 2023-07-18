@@ -133,15 +133,18 @@ describe("locking", () => {
       await mockToken.methods.transfer(locking.options.address, await mockToken.amount(98765)).send({ from: deployer });
       expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
 
-      await locking.methods.recover(mockToken.options.address, await mockToken.amount(98765)).send({ from: deployer });
+      await advanceMonths(1);
+
+      await locking.methods.recover(mockToken.options.address, 0, 0).send({ from: deployer });
       expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
       expect(await tokenBalance(deployer)).bignumber.eq(balanceBefore);
     });
 
     it("recover native balance", async () => {
+      await advanceMonths(1);
       await setBalance(locking.options.address, bn(12345 * 1e18));
       expect(await web3().eth.getBalance(locking.options.address)).bignumber.eq(12345 * 1e18);
-      await locking.methods.recover(mockToken.address, 0).send({ from: deployer });
+      await locking.methods.recover(mockToken.address, 0, 0).send({ from: deployer });
       expect(await web3().eth.getBalance(locking.options.address)).bignumber.zero;
     });
 
