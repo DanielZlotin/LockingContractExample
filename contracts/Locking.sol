@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
-
 contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -37,13 +36,8 @@ contract Locking is Ownable, ReentrancyGuard {
 
     uint256 deployTime;
 
-    struct RewardProgram {
-        uint256 startMonth;
-        uint256 endMonth;
-        uint256 totalRewards;
-    }
-
-    mapping(address => RewardProgram) public rewards;
+    // ERC20 address => month index => amount
+    mapping(address => mapping(uint256 => uint256)) public rewards;
     mapping(address => mapping(address => uint256)) public claimedRewards;
 
     event Locked(address indexed target, uint256 amount, uint256 startMonth, uint256 endMonth);
@@ -55,42 +49,42 @@ contract Locking is Ownable, ReentrancyGuard {
         exponent = _exp;
         penalty = _penalty;
         feeReceiver1 = _feeReceiver1;
-        feeReceiver2 = _feeReceiver2; 
-        deployTime = block.timestamp;  
+        feeReceiver2 = _feeReceiver2;
+        deployTime = block.timestamp;
 
         // 1.00 for funds locked for up to 1 month
-        monthToBoost[0] = 10000;    
+        monthToBoost[0] = 10000;
 
         // 3.74 for funds locked for 1+ months
-        monthToBoost[1] = 37400;    
-        monthToBoost[2] = 37400;    
+        monthToBoost[1] = 37400;
+        monthToBoost[2] = 37400;
 
         // 8.59 for funds locked for 3+ months
-        monthToBoost[3] = 85900;    
-        monthToBoost[4] = 85900;   
-        monthToBoost[5] = 85900;    
+        monthToBoost[3] = 85900;
+        monthToBoost[4] = 85900;
+        monthToBoost[5] = 85900;
 
         // 19.73 for funds locked for 6+ months
-        monthToBoost[6] = 197300;  
-        monthToBoost[7] = 197300;   
-        monthToBoost[8] = 197300;  
-        monthToBoost[9] = 197300;  
-        monthToBoost[10] = 197300;  
-        monthToBoost[11] = 197300; 
-        
+        monthToBoost[6] = 197300;
+        monthToBoost[7] = 197300;
+        monthToBoost[8] = 197300;
+        monthToBoost[9] = 197300;
+        monthToBoost[10] = 197300;
+        monthToBoost[11] = 197300;
+
         // 45.32 for funds locked for 12+ months
-        monthToBoost[12] = 453200; 
-        monthToBoost[13] = 453200; 
-        monthToBoost[14] = 453200; 
-        monthToBoost[15] = 453200; 
-        monthToBoost[16] = 453200; 
-        monthToBoost[17] = 453200; 
-        monthToBoost[18] = 453200; 
-        monthToBoost[19] = 453200; 
-        monthToBoost[20] = 453200; 
-        monthToBoost[21] = 453200; 
-        monthToBoost[22] = 453200; 
-        monthToBoost[23] = 453200;  
+        monthToBoost[12] = 453200;
+        monthToBoost[13] = 453200;
+        monthToBoost[14] = 453200;
+        monthToBoost[15] = 453200;
+        monthToBoost[16] = 453200;
+        monthToBoost[17] = 453200;
+        monthToBoost[18] = 453200;
+        monthToBoost[19] = 453200;
+        monthToBoost[20] = 453200;
+        monthToBoost[21] = 453200;
+        monthToBoost[22] = 453200;
+        monthToBoost[23] = 453200;
     }
 
     function currentMonthIndex() internal view returns (uint256) {
@@ -108,7 +102,7 @@ contract Locking is Ownable, ReentrancyGuard {
         checkpoint();
 
         token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
-        
+
         uint256 _currentMonthIndex = currentMonthIndex();
 
         locks[msg.sender].startMonth = _currentMonthIndex;
@@ -116,7 +110,6 @@ contract Locking is Ownable, ReentrancyGuard {
         locks[msg.sender].amount += amount;
         totalLocked += amount;
 
-        
         for (uint256 i = 0; i < monthsToLock; i++) {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
         }
@@ -167,10 +160,8 @@ contract Locking is Ownable, ReentrancyGuard {
 
         return _totalBoosted / PRECISION;
     }
-    
+
     function totalBoostedAt(uint256 month) private view returns (uint256) {
-        // TODO do we return stored or calculated??
-    
         if (month < _currentMonthIndexStored) {
             return totalBoostHistory[month];
         }
@@ -184,14 +175,13 @@ contract Locking is Ownable, ReentrancyGuard {
 
         return _totalBoosted / PRECISION;
     }
-    
+
     function claim(address user, address rewardToken) external {
         checkpoint();
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         IERC20(rewardToken).safeTransfer(user, _pendingRewards);
     }
-
 
     /*
     output of this function is a 24-element array, named lockedForDuration, ex:
@@ -218,9 +208,6 @@ contract Locking is Ownable, ReentrancyGuard {
         }
     }
 
-    
-    
-
     function checkpoint() public {
         uint256 _currentMonthIndex = currentMonthIndex();
 
@@ -234,62 +221,18 @@ contract Locking is Ownable, ReentrancyGuard {
         _currentMonthIndexStored = currentMonthIndex();
     }
 
-
-    // perstitedTotalBoostHistory => [100, 101,...]
-    // _totalBoostHistoryUpdates =>  [102, 103,...] 
-    // claim -> calls checkpoint -> loops from 102 to ... and updates totalBoostHistory
-
-
-
-
-
     function pendingRewards(address target, address _token) public view returns (uint256) {
-
-        RewardProgram memory rewardProgram = rewards[_token];
-
         Lock memory targetLock = locks[target];
-        uint256 totalRewardsPerMonth = rewardProgram.totalRewards  / (rewardProgram.endMonth - rewardProgram.startMonth);
 
-        uint256 monthFrom = Math.max(rewardProgram.startMonth, targetLock.startMonth);
-        uint256 monthTo = Math.min(Math.min(rewardProgram.endMonth, currentMonthIndex()), targetLock.endMonth);
+        uint256 monthFrom = targetLock.startMonth;
+        uint256 monthTo = Math.min(targetLock.endMonth, currentMonthIndex());
 
         uint256 _pendingRewards = 0;
-
-        /*
-        already claimed tests
-        add more lock positions "in the middle"
-        
-        */
-
-       /*
-
-        // totalBoostedAt(0) = 123 * 3.74
-        // totalBoostedAt(1) = 123 * 3.74
-        // totalBoostedAt(2) = 123 * 1
-        M0: 123
-        M1: 123
-        M2: 123
-
-        // One month has passed and there has been another lock
-
-        // totalBoostedAt(0) = 123 * 3.74
-        // totalBoostedAt(1) = 
-        // totalBoostedAt(2) = 
-        // totalBoostedAt(3) = 
-        // [Queried window is 0-2]
-          M0: 123
-        ------
-        > M1: 223 (100+123)
-          M2: 223 (100+123)
-          M3: 100
-        
-
-       */
 
         for (uint256 i = monthFrom; i < monthTo; i++) {
             uint256 monthsLeft = targetLock.endMonth - i;
             uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-            _pendingRewards += totalRewardsPerMonth * targetBoost / totalBoostedAt(i); // todo pass i
+            _pendingRewards += (rewards[_token][i] * targetBoost) / totalBoostedAt(i);
         }
 
         return _pendingRewards - claimedRewards[target][_token];
@@ -299,9 +242,14 @@ contract Locking is Ownable, ReentrancyGuard {
      * Admin functions
      **************************************/
 
-    function addReward(address _token, RewardProgram calldata reward) external onlyOwner {
-        IERC20(_token).safeTransferFrom(msg.sender, address(this), reward.totalRewards);
-        rewards[_token] = reward;
+    function addReward(address _token, uint256 offset, uint256 months, uint256 amountPerMonth) external onlyOwner {
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), amountPerMonth * months);
+
+        uint256 rewardsStartMonth = currentMonthIndex() + offset;
+
+        for (uint256 i = rewardsStartMonth; i < rewardsStartMonth + months; i++) {
+            rewards[_token][i] += amountPerMonth;
+        }
     }
 
     function setExponent(uint256 _exponent) external onlyOwner {

@@ -12,7 +12,7 @@ describe("Rewards", () => {
     beforeEach(async () => {
       await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(50_000)).send({ from: deployer });
       // 50000 / (60 * 86400) = 0.00964506
-      await locking.methods.addReward(rewardToken.options.address, [0, 5, (await rewardToken.amount(50_000)).toFixed(0)]).send({ from: deployer });
+      await locking.methods.addReward(rewardToken.options.address, 0, 5, (await rewardToken.amount(10_000)).toFixed(0)).send({ from: deployer });
     });
 
     it("user should have reward if did stake and didn't claim so far", async () => {
@@ -123,7 +123,7 @@ describe("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
     });
 
-    it("two user locks different periods, claim at the end of the program", async () => {
+    it("two users lock different periods, claim at the end of the program", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
       await advanceMonths(1);
       await locking.methods.lock(await mockToken.amount(amount), 4).send({ from: userTwo });
@@ -135,11 +135,7 @@ describe("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(userTwo).call()).bignumber.closeTo(bn18(34_858), 1e18);
     });
 
-    it("minimal test for past failure", async () => {
-      /*
-        Step 1 [(*)123, 123, ...]
-        Step 2 [123, (*)246, 246, ...] => when we try to calculate total boost from month 0, we get an unexpected increasing total locked amount (should always decrease)
-       */
+    it("two users lock at different periods, rewards program has not ended", async () => {
       await locking.methods.lock(await mockToken.amount(amount), 2).send({ from: user });
       await advanceMonths(1);
       await locking.methods.lock(await mockToken.amount(amount), 2).send({ from: userTwo });
@@ -147,13 +143,16 @@ describe("Rewards", () => {
       expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(10_000), 1e18);
     });
 
-    // TODO: test for pending rewards, where two users lock at different times, with different boosts and are eligible for different shares of the reward program
+    it("rewards program is updateable", async () => {
+      await rewardToken.methods.approve(locking.options.address, await rewardToken.amount(15_000)).send({ from: deployer });
+      await locking.methods.addReward(rewardToken.options.address, 0, 5, (await rewardToken.amount(3_000)).toFixed(0)).send({ from: deployer });
+      await locking.methods.lock(await mockToken.amount(amount), 5).send({ from: user });
+      await advanceMonths(5);
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(user).call()).bignumber.closeTo(bn18(65_000), 1e18);
+    });
 
-    // TODO: testcase to check pending before advancing a month
-
-    // TODO: write test that checks when more than 50K rewards have been allocated
-
-    // TODO: consider the case user locks at day 29 and is eligible for a month-worth of rewards
+    // TODO (product decision): consider the case user locks at day 29 and is eligible for a month-worth of rewards
 
     // TODO: add a claimBack reward function for each historical month that had totalBoostedSupply of 0
 
