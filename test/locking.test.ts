@@ -148,7 +148,7 @@ describe("locking", () => {
 
     describe("events", () => {
       it("Lock", async () => {
-        const tx = await lock({ duration: 1 });
+        const tx = await lock({ duration: 1, amount });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("Locked");
         expect(events[0].returnValues.target).eq(user1);
@@ -156,7 +156,7 @@ describe("locking", () => {
       });
 
       it("Withdraw", async () => {
-        await lock({ duration: 1 });
+        await lock({ duration: 1, amount });
         await advanceMonths(1);
         const tx = await locking.methods.withdraw().send({ from: user1 });
         const events = parseEvents(tx, locking);
@@ -166,8 +166,7 @@ describe("locking", () => {
       });
 
       it("WithdrawWithPenalty", async () => {
-        await lock({ duration: 1, amount });
-        await lock({ user: user1, amount, duration: 1 });
+        await lock({ amount, duration: 1 });
         const tx = await locking.methods.earlyWithdrawWithPenalty(await xctd.amount(amount / 2)).send({ from: user1 });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("WithdrawWithPenalty");
