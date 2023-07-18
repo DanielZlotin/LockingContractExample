@@ -36,6 +36,7 @@ describe("locking", () => {
       expect(result.amount).bignumber.eq(await mockToken.amount(amount));
     });
 
+    // TODO: add boostedBalanceOf(user) feature
     it.skip("as time passes boosted balance decreases", async () => {
       // await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
       // const balance1 = await locking.methods.boostedBalanceOf(user).call();
@@ -76,25 +77,6 @@ describe("locking", () => {
       expect((await locking.methods.locks(user).call()).amount).bignumber.eq("0");
       await locking.methods.withdraw().send({ from: user });
       expect(await tokenBalance(user)).bignumber.eq(balance);
-    });
-
-    it.skip("increase tokens under lock", async () => {
-      await locking.methods.lock(await mockToken.amount(amount / 2), 1).send({ from: user });
-      const prevDeadline = (await locking.methods.locks(user).call()).endMonth;
-      expect((await locking.methods.locks(user).call()).amount).bignumber.eq(await mockToken.amount(amount / 2));
-
-      await locking.methods.lock(await mockToken.amount(amount / 2), 0).send({ from: user });
-      expect((await locking.methods.locks(user).call()).amount).bignumber.eq(await mockToken.amount(amount));
-      expect((await locking.methods.locks(user).call()).endMonth).bignumber.eq(prevDeadline);
-    });
-
-    // TODO go over all skips
-    it.skip("increase duration under lock", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
-      const prevDeadline = parseInt((await locking.methods.locks(user).call()).endMonth);
-      await locking.methods.lock(0, MONTH).send({ from: user });
-      expect((await locking.methods.locks(user).call()).amount).bignumber.eq(await mockToken.amount(amount));
-      expect((await locking.methods.locks(user).call()).endMonth).bignumber.closeTo(prevDeadline + 1, 1);
     });
 
     it("create lock with zero duration is valid but wasteful", async () => {

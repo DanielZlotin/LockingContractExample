@@ -99,8 +99,9 @@ describe("Rewards", () => {
       // note that 10K got stuck at the beginning of the program, and another 10K got stuck at the end
       const rewardTokenBalance = BN(await rewardToken.methods.balanceOf(locking.options.address).call());
       expect(rewardTokenBalance.minus(pendingRewards)).bignumber.closeTo(bn18(20_000), 1e18);
-      // TODO: uncomment below when we have addded claim functionality
-      // expect(await rewardToken.methods.balanceOf(locking.options.address).call()).bignumber.closeTo(bn18(20_000), 1e18);
+
+      await locking.methods.claim(user, rewardToken.options.address).send({ from: user });
+      expect(await rewardToken.methods.balanceOf(locking.options.address).call()).bignumber.closeTo(bn18(20_000), 1e18);
     });
 
     it("one user locks for three months, claims after 1 month", async () => {
@@ -207,7 +208,5 @@ describe("Rewards", () => {
       await expectRevert(() => locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer }), "Locking:recover:endMonth");
       expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance));
     });
-
-    // TODO (product decision): consider the case user locks at day 29 and is eligible for a month-worth of rewards
   });
 });

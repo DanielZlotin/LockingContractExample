@@ -16,7 +16,7 @@ describe("locking boosted total", () => {
     expect(totalBoosted).to.be.bignumber.eq(0);
   });
 
-  // TODO - rephrase this
+
   it("total boosted power immediately after locking for one user should be maximum", async () => {
     await locking.methods.lock(await mockToken.amount(amount), 3).send({ from: user });
     const totalBoosted = await locking.methods.totalBoosted().call();
@@ -164,7 +164,7 @@ describe("locking boosted total", () => {
   });
 });
 
-// TODO
+// TODO test cases:
 // deposit for 24 months (initial)
 // deposit for 25 months (fail?)
 // deposit some, move 1.5 month forward, deposit for 24 months

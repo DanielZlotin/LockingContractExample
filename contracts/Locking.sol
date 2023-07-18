@@ -36,8 +36,6 @@ contract Locking is Ownable, ReentrancyGuard {
 
     uint256 deployTime;
 
-    // TODO refactor all requires to revert with custom errors and check gas implications
-
     // ERC20 address => month index => amount
     mapping(address => mapping(uint256 => uint256)) public rewards;
     mapping(address => uint256) public rewardBalances;
@@ -104,8 +102,6 @@ contract Locking is Ownable, ReentrancyGuard {
 
         checkpoint();
 
-        token.safeTransferFrom(msg.sender, address(this), amount); // TODO: CEI - should this be at the end?
-
         uint256 _currentMonthIndex = currentMonthIndex();
 
         locks[msg.sender].startMonth = _currentMonthIndex;
@@ -117,6 +113,7 @@ contract Locking is Ownable, ReentrancyGuard {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
         }
 
+        token.safeTransferFrom(msg.sender, address(this), amount);
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
     }
 
@@ -152,8 +149,6 @@ contract Locking is Ownable, ReentrancyGuard {
      **************************************/
 
     function totalBoosted() public view returns (uint256) {
-        // TODO do we return stored or calculated??
-
         uint256[24] memory lockedForDuration = _calculateLockedForDuration(currentMonthIndex());
 
         uint256 _totalBoosted;
@@ -247,7 +242,6 @@ contract Locking is Ownable, ReentrancyGuard {
      **************************************/
 
     function addReward(address _token, uint256 offset, uint256 months, uint256 amountPerMonth) external onlyOwner {
-        // TODO not necessarily owner holds the reward token
         IERC20(_token).safeTransferFrom(msg.sender, address(this), amountPerMonth * months);
 
         uint256 rewardsStartMonth = currentMonthIndex() + offset;
@@ -278,7 +272,6 @@ contract Locking is Ownable, ReentrancyGuard {
             tokenBalanceToRecover -= totalLocked;
         } 
 
-        // TODO: bug - claim from the future!
         // Recover reward for any past months that had 0 locked amount
         for (uint256 i = startMonth; i < endMonth; i++) {
             if (totalBoostedAt(i) == 0) {

@@ -11,3 +11,9 @@ Locking contract requirements
 ⁃ p = a \* t^1.2, where P = points, a = amount of tokens, t = time (months)
 [x] The 1.2 parameter should be admin updatable.
 [x] Deducted penalty should be split between to two addresses set at contract creation time
+
+
+# Open Questions
+
+- consider the case user locks at day 29 and is eligible for a month-worth of rewards
+- owner holds the reward token
