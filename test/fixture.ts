@@ -1,55 +1,54 @@
-import { Token, account, bn18, erc20, BlockInfo } from "@defi.org/web3-candies";
+import { Token, account, bn18, erc20, BlockInfo, Receipt } from "@defi.org/web3-candies";
 import { deployArtifact, mineBlock, tag, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
-import type { Locking, MockERC20 } from "../typechain-hardhat/contracts";
+import type { Locking } from "../typechain-hardhat/contracts";
+import type { MockERC20 } from "../typechain-hardhat/contracts/test";
 import BN from "bignumber.js";
 
 useChaiBigNumber();
 
 export let deployer: string;
-export let user: string;
-export let userTwo: string;
+export let user1: string;
+export let user2: string;
 export let feeReceiver1: string;
 export let feeReceiver2: string;
 
-export let mockToken: MockERC20 & Token;
+export let xctd: MockERC20 & Token;
 export let rewardToken: MockERC20 & Token;
 export let locking: Locking;
 
 const DAY = 60 * 60 * 24;
-const WEEK = DAY * 7;
 const MONTH = DAY * 30;
 export const PRECISION = 10000;
 
 export async function withFixture() {
   deployer = await account(9);
-  user = await account(0);
+  user1 = await account(0);
+  user2 = await account(3);
   feeReceiver1 = await account(1);
   feeReceiver2 = await account(2);
-  userTwo = await account(3);
-  tag(user, "user");
-  tag(userTwo, "userTwo");
   tag(deployer, "deployer");
+  tag(user1, "user1");
+  tag(user2, "user2");
   tag(feeReceiver1, "feeReceiver1");
   tag(feeReceiver2, "feeReceiver2");
 
-  mockToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "MockToken"])).options.address);
-  rewardToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "MockReward"])).options.address);
-  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [mockToken.options.address, 12000, 9000, feeReceiver1, feeReceiver2]);
+  xctd = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "XCTD"])).options.address);
+  rewardToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "RewardToken"])).options.address);
+  locking = await deployArtifact<Locking>("Locking", { from: deployer }, [xctd.options.address, 9000, feeReceiver1, feeReceiver2]);
 
-  expect(await locking.methods.token().call()).eq(mockToken.options.address);
+  expect(await locking.methods.xctd().call()).eq(xctd.options.address);
 }
 
-export async function withMockTokens(amount: BN.Value) {
-  await mockToken.methods.transfer(user, await mockToken.amount(amount)).send({ from: deployer });
-  await mockToken.methods.approve(locking.options.address, await mockToken.amount(amount)).send({ from: user });
-
-  await mockToken.methods.transfer(userTwo, await mockToken.amount(amount)).send({ from: deployer });
-  await mockToken.methods.approve(locking.options.address, await mockToken.amount(amount)).send({ from: userTwo });
+export async function fundWithXCTD(amount: BN.Value, targets: string[] = [user1, user2]) {
+  for (const target of targets) {
+    await xctd.methods.transfer(target, await xctd.amount(amount)).send({ from: deployer });
+    await xctd.methods.approve(locking.options.address, await xctd.amount(amount)).send({ from: target });
+  }
 }
 
-export async function tokenBalance(address: string) {
-  return BN(await mockToken.methods.balanceOf(address).call());
+export async function xctdBalance(address: string) {
+  return BN(await xctd.methods.balanceOf(address).call());
 }
 
 export function advanceDays(days: number): Promise<BlockInfo> {
@@ -58,4 +57,8 @@ export function advanceDays(days: number): Promise<BlockInfo> {
 
 export function advanceMonths(months: number): Promise<BlockInfo> {
   return mineBlock(months * MONTH);
+}
+
+export async function lock(params: { user?: string; amount?: number; duration?: number }): Promise<Receipt> {
+  return await locking.methods.lock(await xctd.amount(params.amount ?? 100), params.duration ?? 24).send({ from: params.user ?? user1 });
 }

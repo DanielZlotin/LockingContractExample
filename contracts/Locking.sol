@@ -11,12 +11,11 @@ import "hardhat/console.sol";
 contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    IERC20 public token; // FoT is NOT supported
+    IERC20 public xctd;
     mapping(address => Lock) public locks;
     uint256 public totalLocked = 0;
 
     uint256 public constant PRECISION = 10000;
-    uint256 public exponent; // based on PERCISION
     uint256 public immutable penalty; // based on PERCISION
     address public immutable feeReceiver1; // 50% of penalties
     address public immutable feeReceiver2; // 50% of penalties
@@ -45,9 +44,8 @@ contract Locking is Ownable, ReentrancyGuard {
     event Withdraw(address indexed target, uint256 amount);
     event WithdrawWithPenalty(address indexed target, uint256 amount, uint256 penalty);
 
-    constructor(address _token, uint256 _exp, uint256 _penalty, address _feeReceiver1, address _feeReceiver2) {
-        token = IERC20(_token);
-        exponent = _exp;
+    constructor(address _xctd, uint256 _penalty, address _feeReceiver1, address _feeReceiver2) {
+        xctd = IERC20(_xctd);
         penalty = _penalty;
         feeReceiver1 = _feeReceiver1;
         feeReceiver2 = _feeReceiver2;
@@ -113,7 +111,7 @@ contract Locking is Ownable, ReentrancyGuard {
             lockedPerMonth[(_currentMonthIndex + i)] += amount;
         }
 
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        xctd.safeTransferFrom(msg.sender, address(this), amount);
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
     }
 
@@ -122,7 +120,7 @@ contract Locking is Ownable, ReentrancyGuard {
         uint256 amount = locks[msg.sender].amount;
         delete locks[msg.sender];
         totalLocked -= amount;
-        token.safeTransfer(msg.sender, amount);
+        xctd.safeTransfer(msg.sender, amount);
         emit Withdraw(msg.sender, amount);
     }
 
@@ -137,10 +135,10 @@ contract Locking is Ownable, ReentrancyGuard {
 
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
         uint256 amountAfterPenalty = amount - penaltyAmount; // this also protects (by underflowing) against penalty > 100%, which can open exploit
-        token.safeTransfer(msg.sender, amountAfterPenalty);
+        xctd.safeTransfer(msg.sender, amountAfterPenalty);
 
-        token.safeTransfer(feeReceiver1, penaltyAmount / 2);
-        token.safeTransfer(feeReceiver2, penaltyAmount - (penaltyAmount / 2));
+        xctd.safeTransfer(feeReceiver1, penaltyAmount / 2);
+        xctd.safeTransfer(feeReceiver2, penaltyAmount - (penaltyAmount / 2));
         emit WithdrawWithPenalty(msg.sender, amount, penaltyAmount);
     }
 
@@ -253,10 +251,6 @@ contract Locking is Ownable, ReentrancyGuard {
         rewardBalances[_token] += amountPerMonth * months;
     }
 
-    function setExponent(uint256 _exponent) external onlyOwner {
-        exponent = _exponent;
-    }
-
     function renounceOwnership() public view override onlyOwner {
         revert();
     }
@@ -268,9 +262,9 @@ contract Locking is Ownable, ReentrancyGuard {
         uint256 tokenBalanceToRecover = IERC20(tokenAddress).balanceOf(address(this)) - rewardBalances[tokenAddress];
 
         // in case of XCTD, we also need to retain the total locked amount in the contract
-        if (tokenAddress == address(token)) {
+        if (tokenAddress == address(xctd)) {
             tokenBalanceToRecover -= totalLocked;
-        } 
+        }
 
         // Recover reward for any past months that had 0 locked amount
         for (uint256 i = startMonth; i < endMonth; i++) {

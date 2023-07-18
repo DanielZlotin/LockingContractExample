@@ -2,16 +2,16 @@ import { block, bn, bn18, maxUint256, parseEvents, web3 } from "@defi.org/web3-c
 import { expectRevert, setBalance } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
 import {
-  DAY,
+  lock,
   deployer,
   feeReceiver1,
   feeReceiver2,
   locking,
-  mockToken,
-  tokenBalance,
-  user,
+  xctd,
+  xctdBalance,
+  user1,
   withFixture,
-  withMockTokens,
+  fundWithXCTD,
   advanceDays,
   advanceMonths,
 } from "./fixture";
@@ -21,19 +21,19 @@ describe("locking", () => {
 
   describe("with tokens", () => {
     const amount = 1234.567891234567;
-    beforeEach(async () => withMockTokens(amount));
+    beforeEach(async () => fundWithXCTD(amount));
 
     it("user sends tokens after approval", async () => {
-      expect(await tokenBalance(locking.options.address)).bignumber.zero;
-      await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
-      expect(await tokenBalance(locking.options.address)).bignumber.eq(await mockToken.amount(amount));
+      expect(await xctdBalance(locking.options.address)).bignumber.zero;
+      await locking.methods.lock(await xctd.amount(amount), 1).send({ from: user1 });
+      expect(await xctdBalance(locking.options.address)).bignumber.eq(await xctd.amount(amount));
     });
 
     it("get locked balance", async () => {
       const startDate = (await block()).timestamp;
-      await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
-      const result = await locking.methods.locks(user).call();
-      expect(result.amount).bignumber.eq(await mockToken.amount(amount));
+      await locking.methods.lock(await xctd.amount(amount), 1).send({ from: user1 });
+      const result = await locking.methods.locks(user1).call();
+      expect(result.amount).bignumber.eq(await xctd.amount(amount));
     });
 
     // TODO: add boostedBalanceOf(user) feature
@@ -46,109 +46,100 @@ describe("locking", () => {
     });
 
     it("early partial withdrawal with penalty", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
+      await lock({ duration: 1, amount });
 
-      const balanceBefore = await tokenBalance(user);
+      const balanceBefore = await xctdBalance(user1);
       const withdrawalAmount = bn18(100);
-      await locking.methods.earlyWithdrawWithPenalty(withdrawalAmount).send({ from: user });
+      await locking.methods.earlyWithdrawWithPenalty(withdrawalAmount).send({ from: user1 });
 
-      const balanceAfter = await tokenBalance(user);
+      const balanceAfter = await xctdBalance(user1);
       expect(balanceAfter.minus(balanceBefore)).bignumber.closeTo(withdrawalAmount.times(0.1), 1e18);
-      expect((await locking.methods.locks(user).call()).amount).bignumber.closeTo(bn18(amount).minus(withdrawalAmount), 1e18);
+      expect((await locking.methods.locks(user1).call()).amount).bignumber.closeTo(bn18(amount).minus(withdrawalAmount), 1e18);
     });
 
     it("penalty goes to fee receivers 50/50", async () => {
-      expect(await tokenBalance(feeReceiver1)).bignumber.zero;
-      expect(await tokenBalance(feeReceiver2)).bignumber.zero;
-      await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
+      expect(await xctdBalance(feeReceiver1)).bignumber.zero;
+      expect(await xctdBalance(feeReceiver2)).bignumber.zero;
+      await locking.methods.lock(await xctd.amount(amount), 1).send({ from: user1 });
       const withdrawalAmount = bn18(100);
-      await locking.methods.earlyWithdrawWithPenalty(withdrawalAmount).send({ from: user });
-      expect(await tokenBalance(feeReceiver1)).bignumber.closeTo(bn18(45), 1e18);
-      expect(await tokenBalance(feeReceiver2)).bignumber.closeTo(bn18(45), 1e18);
+      await locking.methods.earlyWithdrawWithPenalty(withdrawalAmount).send({ from: user1 });
+      expect(await xctdBalance(feeReceiver1)).bignumber.closeTo(bn18(45), 1e18);
+      expect(await xctdBalance(feeReceiver2)).bignumber.closeTo(bn18(45), 1e18);
     });
 
     it("withdraw all of the amount after the lock has elapsed", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 6).send({ from: user });
+      await lock({ duration: 6, amount });
       await advanceMonths(6);
-      await locking.methods.withdraw().send({ from: user });
-      const balance = await tokenBalance(user);
+      await locking.methods.withdraw().send({ from: user1 });
+      const balance = await xctdBalance(user1);
       expect(balance).bignumber.closeTo(bn18(amount), 1e18);
 
-      expect((await locking.methods.locks(user).call()).amount).bignumber.eq("0");
-      await locking.methods.withdraw().send({ from: user });
-      expect(await tokenBalance(user)).bignumber.eq(balance);
+      expect((await locking.methods.locks(user1).call()).amount).bignumber.eq("0");
+      await locking.methods.withdraw().send({ from: user1 });
+      expect(await xctdBalance(user1)).bignumber.eq(balance);
     });
 
     it("create lock with zero duration is valid but wasteful", async () => {
-      await locking.methods.lock(await mockToken.amount(amount), 0).send({ from: user });
+      await locking.methods.lock(await xctd.amount(amount), 0).send({ from: user1 });
     });
 
     it("create lock with zero amount is valid but wasteful", async () => {
-      await locking.methods.lock(0, 1).send({ from: user });
+      await locking.methods.lock(0, 1).send({ from: user1 });
     });
 
     it("ownable", async () => {
       expect(await locking.methods.owner().call()).eq(deployer);
     });
 
-    it("owner can set exponent", async () => {
-      await locking.methods.setExponent(12345).send({ from: deployer });
-      expect(await locking.methods.exponent().call()).bignumber.eq(12345);
-    });
-
     it("early full withdrawal deletes the lock", async () => {
-      await locking.methods.lock(await mockToken.amount(amount / 2), 24).send({ from: user });
+      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user1 });
       await advanceMonths(1);
-      await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user });
-      expect((await locking.methods.locks(user).call()).endMonth).bignumber.zero;
+      await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user1 });
+      expect((await locking.methods.locks(user1).call()).endMonth).bignumber.zero;
 
-      await locking.methods.lock(await mockToken.amount(amount / 2), 1).send({ from: user });
-      expect((await locking.methods.locks(user).call()).amount).bignumber.eq(await mockToken.amount(amount / 2));
+      await locking.methods.lock(await xctd.amount(amount / 2), 1).send({ from: user1 });
+      expect((await locking.methods.locks(user1).call()).amount).bignumber.eq(await xctd.amount(amount / 2));
     });
 
     it("recover tokens above total locked", async () => {
-      await locking.methods.lock(await mockToken.amount(amount / 2), 24).send({ from: user });
-      await locking.methods.lock(await mockToken.amount(amount / 2), 24).send({ from: user });
-      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
+      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user1 });
+      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user1 });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await xctd.amount(amount));
 
-      const balanceBefore = await tokenBalance(deployer);
-      await mockToken.methods.transfer(locking.options.address, await mockToken.amount(98765)).send({ from: deployer });
-      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
+      const balanceBefore = await xctdBalance(deployer);
+      await xctd.methods.transfer(locking.options.address, await xctd.amount(98765)).send({ from: deployer });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await xctd.amount(amount));
 
       await advanceMonths(1);
 
-      await locking.methods.recover(mockToken.options.address, 0, 0).send({ from: deployer });
-      expect(await locking.methods.totalLocked().call()).bignumber.eq(await mockToken.amount(amount));
-      expect(await tokenBalance(deployer)).bignumber.eq(balanceBefore);
+      await locking.methods.recover(xctd.options.address, 0, 0).send({ from: deployer });
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await xctd.amount(amount));
+      expect(await xctdBalance(deployer)).bignumber.eq(balanceBefore);
     });
 
     it("recover native balance", async () => {
       await advanceMonths(1);
       await setBalance(locking.options.address, bn(12345 * 1e18));
       expect(await web3().eth.getBalance(locking.options.address)).bignumber.eq(12345 * 1e18);
-      await locking.methods.recover(mockToken.address, 0, 0).send({ from: deployer });
+      await locking.methods.recover(xctd.address, 0, 0).send({ from: deployer });
       expect(await web3().eth.getBalance(locking.options.address)).bignumber.zero;
     });
 
     describe("errors", () => {
       it("cannot send eth to contract", async () => {
-        await expectRevert(() => web3().eth.sendTransaction({ from: user, to: locking.options.address, value: 1 }), "no fallback nor receive function");
+        await expectRevert(() => web3().eth.sendTransaction({ from: user1, to: locking.options.address, value: 1 }), "no fallback nor receive function");
       });
 
       it("withdraw only possible after lock elapsed", async () => {
-        await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
-        await expectRevert(() => locking.methods.withdraw().send({ from: user }), "Locking:withdraw:endMonth");
+        await lock({ duration: 1 });
+        await expectRevert(() => locking.methods.withdraw().send({ from: user1 }), "Locking:withdraw:endMonth");
       });
 
       it("create lock with zero amount and duration", async () => {
-        await expectRevert(() => locking.methods.lock(0, 0).send({ from: user }), "Locking:lock:params");
+        await expectRevert(() => locking.methods.lock(0, 0).send({ from: user1 }), "Locking:lock:params");
       });
 
       describe("only owner", () => {
-        it("setExponent", async () => {
-          await expectRevert(() => locking.methods.setExponent(12345).send({ from: user }), "caller is not the owner");
-        });
-
         it("cannot renounce ownership", async () => {
           await expectRevert(() => locking.methods.renounceOwnership().send({ from: deployer }), "revert");
         });
@@ -157,29 +148,30 @@ describe("locking", () => {
 
     describe("events", () => {
       it("Lock", async () => {
-        const tx = await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
+        const tx = await lock({ duration: 1 });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("Locked");
-        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.target).eq(user1);
         expect(events[0].returnValues.amount).bignumber.eq(bn18(amount));
       });
 
       it("Withdraw", async () => {
-        await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
+        await lock({ duration: 1 });
         await advanceMonths(1);
-        const tx = await locking.methods.withdraw().send({ from: user });
+        const tx = await locking.methods.withdraw().send({ from: user1 });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("Withdraw");
-        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.target).eq(user1);
         expect(events[0].returnValues.amount).bignumber.eq(bn18(amount));
       });
 
       it("WithdrawWithPenalty", async () => {
-        await locking.methods.lock(await mockToken.amount(amount), 1).send({ from: user });
-        const tx = await locking.methods.earlyWithdrawWithPenalty(await mockToken.amount(amount / 2)).send({ from: user });
+        await lock({ duration: 1, amount });
+        await lock({ user: user1, amount, duration: 1 });
+        const tx = await locking.methods.earlyWithdrawWithPenalty(await xctd.amount(amount / 2)).send({ from: user1 });
         const events = parseEvents(tx, locking);
         expect(events[0].event).eq("WithdrawWithPenalty");
-        expect(events[0].returnValues.target).eq(user);
+        expect(events[0].returnValues.target).eq(user1);
         expect(events[0].returnValues.amount).bignumber.eq(bn18(amount / 2));
       });
     });
