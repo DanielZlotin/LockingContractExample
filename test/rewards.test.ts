@@ -209,7 +209,5 @@ describe("Rewards", () => {
     });
 
     // TODO (product decision): consider the case user locks at day 29 and is eligible for a month-worth of rewards
-
-    // TODO: add a claimBack reward function for each historical month that had totalBoostedSupply of 0
   });
 });
