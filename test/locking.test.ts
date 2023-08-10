@@ -14,6 +14,8 @@ import {
   fundWithXCTD,
   advanceDays,
   advanceMonths,
+  user2,
+  PRECISION,
 } from "./fixture";
 
 describe("locking", () => {
@@ -91,14 +93,26 @@ describe("locking", () => {
       expect(await locking.methods.owner().call()).eq(deployer);
     });
 
-    it("early full withdrawal deletes the lock", async () => {
-      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user1 });
-      await advanceMonths(1);
-      await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user1 });
-      expect((await locking.methods.locks(user1).call()).endMonth).bignumber.zero;
+    it("early full withdrawal deletes the lock and updates totals", async () => {
+      expect(await locking.methods.totalBoosted().call()).bignumber.zero;
 
-      await locking.methods.lock(await xctd.amount(amount / 2), 1).send({ from: user1 });
-      expect((await locking.methods.locks(user1).call()).amount).bignumber.eq(await xctd.amount(amount / 2));
+      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user1 });
+      await locking.methods.lock(await xctd.amount(amount / 2), 24).send({ from: user2 });
+
+      await advanceMonths(1);
+
+      expect(await locking.methods.totalBoosted().call()).bignumber.eq(
+        (await xctd.amount(amount)).multipliedBy(await locking.methods.monthToBoost(23).call()).dividedBy(PRECISION)
+      );
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await xctd.amount(amount));
+
+      await locking.methods.earlyWithdrawWithPenalty(maxUint256).send({ from: user1 });
+
+      expect((await locking.methods.locks(user1).call()).endMonth).bignumber.zero;
+      expect(await locking.methods.totalBoosted().call()).bignumber.eq(
+        (await xctd.amount(amount / 2)).multipliedBy(await locking.methods.monthToBoost(23).call()).dividedBy(PRECISION)
+      );
+      expect(await locking.methods.totalLocked().call()).bignumber.eq(await xctd.amount(amount / 2));
     });
 
     it("recover tokens above total locked", async () => {

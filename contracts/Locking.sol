@@ -98,7 +98,7 @@ contract Locking is Ownable, ReentrancyGuard {
     function lock(uint256 amount, uint256 monthsToLock) external nonReentrant {
         require(amount > 0 || monthsToLock > 0, "Locking:lock:params");
 
-        checkpoint();
+        // checkpoint();
 
         uint256 _currentMonthIndex = currentMonthIndex();
 
@@ -124,14 +124,31 @@ contract Locking is Ownable, ReentrancyGuard {
         emit Withdraw(msg.sender, amount);
     }
 
+    // TODO shouldn't early withdrawals checkpoint? - I actually can't prove it, but I don't see the harm either
+    // next part -> if we're modifying the lock amount, we're modifying the past
+    // instead, we perhaps should only allow a full withdrawal rather than partial
+    // ALSO, this means we should probably either maintain a history of previous locks, or somehow force you to claim all unclaimed rewards prior to unlocking
+    // otherwise, you've lost eligibility for those rewards!
+    //
+    // could we instead just maintain a locks window same as the totals, only per user?
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
-        if (amount >= locks[msg.sender].amount) {
-            amount = locks[msg.sender].amount;
-            delete locks[msg.sender];
-        } else {
-            locks[msg.sender].amount -= amount;
+        amount = Math.min(amount, locks[msg.sender].amount);
+
+        if (amount == 0) {
+            return;
         }
+
+        for (uint256 i = Math.max(currentMonthIndex(), locks[msg.sender].startMonth); i < locks[msg.sender].endMonth; i++) {
+            lockedPerMonth[(locks[msg.sender].startMonth + i)] -= amount;
+        }
+
         totalLocked -= amount;
+
+        locks[msg.sender].amount -= amount;
+
+        if (locks[msg.sender].amount == 0) {
+            delete locks[msg.sender];
+        }
 
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
         uint256 amountAfterPenalty = amount - penaltyAmount; // this also protects (by underflowing) against penalty > 100%, which can open exploit
@@ -157,7 +174,7 @@ contract Locking is Ownable, ReentrancyGuard {
         return _totalBoosted / PRECISION;
     }
 
-    function totalBoostedAt(uint256 month) private view returns (uint256) {
+    function totalBoostedAt(uint256 month) public view returns (uint256) {
         if (month < _currentMonthIndexStored) {
             return totalBoostHistory[month];
         }
@@ -173,7 +190,7 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function claim(address user, address rewardToken) external {
-        checkpoint();
+        // checkpoint(); // TODO - how do we trigger this if rewards is separated?
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         rewardBalances[rewardToken] -= _pendingRewards;
@@ -218,6 +235,10 @@ contract Locking is Ownable, ReentrancyGuard {
         _currentMonthIndexStored = currentMonthIndex();
     }
 
+    // TODO if we were to separate this
+    // we need to be able to query the target's lock - easy
+    // we need to get configuration boost - easy
+    // we need total boosted at - easy
     function pendingRewards(address target, address _token) public view returns (uint256) {
         Lock memory targetLock = locks[target];
 
