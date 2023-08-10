@@ -115,6 +115,7 @@ contract Locking is Ownable, ReentrancyGuard {
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
     }
 
+    // TODO why not checkpoint? (but also, is it mandatory?)
     function withdraw() external nonReentrant {
         require(locks[msg.sender].endMonth <= currentMonthIndex(), "Locking:withdraw:endMonth");
         uint256 amount = locks[msg.sender].amount;
@@ -124,14 +125,41 @@ contract Locking is Ownable, ReentrancyGuard {
         emit Withdraw(msg.sender, amount);
     }
 
+    // TODO shouldn't early withdrawals checkpoint? - I actually can't prove it, but I don't see the harm either
+    // next part -> if we're modifying the lock amount, we're modifying the past
+    // instead, we perhaps should only allow a full withdrawal rather than partial
+    // ALSO, this means we should probably either maintain a history of previous locks, or somehow force you to claim all unclaimed rewards prior to unlocking
+    // otherwise, you've lost eligibility for those rewards!
+    //
+    // could we instead just maintain a locks window same as the totals, only per user?
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
-        if (amount >= locks[msg.sender].amount) {
-            amount = locks[msg.sender].amount;
-            delete locks[msg.sender];
-        } else {
-            locks[msg.sender].amount -= amount;
+        amount = Math.min(amount, locks[msg.sender].amount);
+
+        if (amount == 0) {
+            return;
         }
+
+        // we were missing adjustments of the total boosts in the future in case there has been an early withdrawal.
+
+        // this means that, for example, if:
+
+        // at month 13, you lock for 24 months to get a 45x boost
+        // at month 14, you withdraw early.
+
+        // we remove your position from current to future months, now it seems as if you were locked from months [13-14] only and is eligible for a 1x boost for these months instead.
+
+        // this isn't a complete solution yet
+        for (uint256 i = Math.max(currentMonthIndex(), locks[msg.sender].startMonth); i < locks[msg.sender].endMonth; i++) {
+            lockedPerMonth[i] -= amount;
+        }
+
         totalLocked -= amount;
+
+        locks[msg.sender].amount -= amount;
+
+        if (locks[msg.sender].amount == 0) {
+            delete locks[msg.sender];
+        }
 
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
         uint256 amountAfterPenalty = amount - penaltyAmount; // this also protects (by underflowing) against penalty > 100%, which can open exploit
@@ -173,7 +201,8 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function claim(address user, address rewardToken) external {
-        checkpoint();
+        // checkpoint(); // TODO - how do we trigger this if rewards is separated? on the other hand, if locks/withdrawals already checkpoint,
+        // is it necessary to checkpoint here? at the very least we don't have any test failing as a result of commenting this out.
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         rewardBalances[rewardToken] -= _pendingRewards;

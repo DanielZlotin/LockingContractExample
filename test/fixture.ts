@@ -20,6 +20,7 @@ export let locking: Locking;
 const DAY = 60 * 60 * 24;
 const MONTH = DAY * 30;
 export const PRECISION = 10000;
+export const INITIAL_MONTH = 25;
 
 export async function withFixture() {
   deployer = await account(9);
@@ -38,6 +39,9 @@ export async function withFixture() {
   locking = await deployArtifact<Locking>("Locking", { from: deployer }, [xctd.options.address, 9000, feeReceiver1, feeReceiver2]);
 
   expect(await locking.methods.xctd().call()).eq(xctd.options.address);
+
+  // Introduce a more-than-window period to ensure that no test relies on currentMonthIndex being equal to 0
+  await advanceMonths(INITIAL_MONTH);
 }
 
 export async function fundWithXCTD(amount: BN.Value, targets: string[] = [user1, user2]) {
