@@ -1,6 +1,6 @@
 import { block, bn18 } from "@defi.org/web3-candies";
 import { expect } from "chai";
-import { locking, xctd, rewardToken, user1, user2, withFixture, fundWithXCTD, deployer, advanceMonths } from "./fixture";
+import { locking, xctd, rewardToken, user1, user2, withFixture, fundWithXCTD, deployer, advanceMonths, INITIAL_MONTH } from "./fixture";
 import BN from "bignumber.js";
 import { expectRevert } from "@defi.org/web3-candies/dist/hardhat";
 
@@ -197,9 +197,9 @@ describe("Rewards", () => {
     it("owner can only recover reward funds per month a single time", async () => {
       const initialBalance = await rewardToken.methods.balanceOf(deployer).call();
       await advanceMonths(6);
-      await locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer });
+      await locking.methods.recover(rewardToken.options.address, INITIAL_MONTH, INITIAL_MONTH + 5).send({ from: deployer });
       expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance).plus(await rewardToken.amount(50_000)));
-      await locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer });
+      await locking.methods.recover(rewardToken.options.address, INITIAL_MONTH, INITIAL_MONTH + 5).send({ from: deployer });
       expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance).plus(await rewardToken.amount(50_000)));
     });
 
@@ -215,7 +215,10 @@ describe("Rewards", () => {
 
     it("owner cannot recover funds from the future", async () => {
       const initialBalance = await rewardToken.methods.balanceOf(deployer).call();
-      await expectRevert(() => locking.methods.recover(rewardToken.options.address, 0, 5).send({ from: deployer }), "Locking:recover:endMonth");
+      await expectRevert(
+        () => locking.methods.recover(rewardToken.options.address, INITIAL_MONTH, INITIAL_MONTH + 5).send({ from: deployer }),
+        "Locking:recover:endMonth"
+      );
       expect(await rewardToken.methods.balanceOf(deployer).call()).bignumber.eq(BN(initialBalance));
     });
   });

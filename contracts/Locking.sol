@@ -139,7 +139,7 @@ contract Locking is Ownable, ReentrancyGuard {
         }
 
         for (uint256 i = Math.max(currentMonthIndex(), locks[msg.sender].startMonth); i < locks[msg.sender].endMonth; i++) {
-            lockedPerMonth[(locks[msg.sender].startMonth + i)] -= amount;
+            lockedPerMonth[i] -= amount;
         }
 
         totalLocked -= amount;
