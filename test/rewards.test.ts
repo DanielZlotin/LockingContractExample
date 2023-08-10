@@ -129,7 +129,7 @@ describe("Rewards", () => {
       await locking.methods.lock(await xctd.amount(amount), 3).send({ from: user1 });
       await advanceMonths(1);
       await locking.methods.lock(await xctd.amount(amount), 4).send({ from: user2 });
-      await advanceMonths(100);
+      await advanceMonths(4);
       await locking.methods.claim(user1, rewardToken.options.address).send({ from: user1 });
 
       expect(await rewardToken.methods.balanceOf(user1).call()).bignumber.closeTo(bn18(15_142), 1e18);
