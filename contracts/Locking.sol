@@ -201,8 +201,8 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     function claim(address user, address rewardToken) external {
-        // checkpoint(); // TODO - how do we trigger this if rewards is separated?
-        // TODO also, I couldn't find a case where not creating a lock here causes a problem (other than gas optimisation)
+        // checkpoint(); // TODO - how do we trigger this if rewards is separated? on the other hand, if locks/withdrawals already checkpoint,
+        // is it necessary to checkpoint here? at the very least we don't have any test failing as a result of commenting this out.
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         rewardBalances[rewardToken] -= _pendingRewards;
