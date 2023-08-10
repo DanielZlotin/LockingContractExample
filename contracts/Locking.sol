@@ -115,6 +115,7 @@ contract Locking is Ownable, ReentrancyGuard {
         emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
     }
 
+    // TODO why not checkpoint? (but also, is it mandatory?)
     function withdraw() external nonReentrant {
         require(locks[msg.sender].endMonth <= currentMonthIndex(), "Locking:withdraw:endMonth");
         uint256 amount = locks[msg.sender].amount;
