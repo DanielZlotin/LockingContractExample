@@ -185,7 +185,7 @@ contract Locking is Ownable, ReentrancyGuard {
         return _totalBoosted / PRECISION;
     }
 
-    function totalBoostedAt(uint256 month) public view returns (uint256) {
+    function totalBoostedAt(uint256 month) private view returns (uint256) {
         if (month < _currentMonthIndexStored) {
             return totalBoostHistory[month];
         }
