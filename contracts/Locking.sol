@@ -98,7 +98,7 @@ contract Locking is Ownable, ReentrancyGuard {
     function lock(uint256 amount, uint256 monthsToLock) external nonReentrant {
         require(amount > 0 || monthsToLock > 0, "Locking:lock:params");
 
-        // checkpoint();
+        checkpoint();
 
         uint256 _currentMonthIndex = currentMonthIndex();
 
@@ -191,6 +191,7 @@ contract Locking is Ownable, ReentrancyGuard {
 
     function claim(address user, address rewardToken) external {
         // checkpoint(); // TODO - how do we trigger this if rewards is separated?
+        // TODO also, I couldn't find a case where not creating a lock here causes a problem (other than gas optimisation)
         uint256 _pendingRewards = pendingRewards(user, rewardToken);
         claimedRewards[user][rewardToken] += _pendingRewards;
         rewardBalances[rewardToken] -= _pendingRewards;
@@ -235,10 +236,6 @@ contract Locking is Ownable, ReentrancyGuard {
         _currentMonthIndexStored = currentMonthIndex();
     }
 
-    // TODO if we were to separate this
-    // we need to be able to query the target's lock - easy
-    // we need to get configuration boost - easy
-    // we need total boosted at - easy
     function pendingRewards(address target, address _token) public view returns (uint256) {
         Lock memory targetLock = locks[target];
 
