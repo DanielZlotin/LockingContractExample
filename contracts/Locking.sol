@@ -12,7 +12,7 @@ contract Locking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public xctd;
-    mapping(address => Lock) public locks;
+    mapping(address => Lock) public _locks;
     uint256 public totalLocked = 0;
 
     uint256 public constant PRECISION = 10000;
@@ -34,11 +34,6 @@ contract Locking is Ownable, ReentrancyGuard {
     }
 
     uint256 deployTime;
-
-    // ERC20 address => month index => amount
-    mapping(address => mapping(uint256 => uint256)) public rewards;
-    mapping(address => uint256) public rewardBalances;
-    mapping(address => mapping(address => uint256)) public claimedRewards;
 
     event Locked(address indexed target, uint256 amount, uint256 startMonth, uint256 endMonth);
     event Withdraw(address indexed target, uint256 amount);
@@ -86,7 +81,7 @@ contract Locking is Ownable, ReentrancyGuard {
         monthToBoost[23] = 453200;
     }
 
-    function currentMonthIndex() internal view returns (uint256) {
+    function currentMonthIndex() public view returns (uint256) {
         return uint256((block.timestamp - deployTime) / 30 days);
     }
 
@@ -102,9 +97,9 @@ contract Locking is Ownable, ReentrancyGuard {
 
         uint256 _currentMonthIndex = currentMonthIndex();
 
-        locks[msg.sender].startMonth = _currentMonthIndex;
-        locks[msg.sender].endMonth = locks[msg.sender].startMonth + monthsToLock;
-        locks[msg.sender].amount += amount;
+        _locks[msg.sender].startMonth = _currentMonthIndex;
+        _locks[msg.sender].endMonth = _locks[msg.sender].startMonth + monthsToLock;
+        _locks[msg.sender].amount += amount;
         totalLocked += amount;
 
         for (uint256 i = 0; i < monthsToLock; i++) {
@@ -112,14 +107,14 @@ contract Locking is Ownable, ReentrancyGuard {
         }
 
         xctd.safeTransferFrom(msg.sender, address(this), amount);
-        emit Locked(msg.sender, locks[msg.sender].amount, locks[msg.sender].startMonth, locks[msg.sender].endMonth);
+        emit Locked(msg.sender, _locks[msg.sender].amount, _locks[msg.sender].startMonth, _locks[msg.sender].endMonth);
     }
 
     // TODO why not checkpoint? (but also, is it mandatory?)
     function withdraw() external nonReentrant {
-        require(locks[msg.sender].endMonth <= currentMonthIndex(), "Locking:withdraw:endMonth");
-        uint256 amount = locks[msg.sender].amount;
-        delete locks[msg.sender];
+        require(_locks[msg.sender].endMonth <= currentMonthIndex(), "Locking:withdraw:endMonth");
+        uint256 amount = _locks[msg.sender].amount;
+        delete _locks[msg.sender];
         totalLocked -= amount;
         xctd.safeTransfer(msg.sender, amount);
         emit Withdraw(msg.sender, amount);
@@ -133,7 +128,7 @@ contract Locking is Ownable, ReentrancyGuard {
     //
     // could we instead just maintain a locks window same as the totals, only per user?
     function earlyWithdrawWithPenalty(uint256 amount) external nonReentrant {
-        amount = Math.min(amount, locks[msg.sender].amount);
+        amount = Math.min(amount, _locks[msg.sender].amount);
 
         if (amount == 0) {
             return;
@@ -149,16 +144,16 @@ contract Locking is Ownable, ReentrancyGuard {
         // we remove your position from current to future months, now it seems as if you were locked from months [13-14] only and is eligible for a 1x boost for these months instead.
 
         // this isn't a complete solution yet
-        for (uint256 i = Math.max(currentMonthIndex(), locks[msg.sender].startMonth); i < locks[msg.sender].endMonth; i++) {
+        for (uint256 i = Math.max(currentMonthIndex(), _locks[msg.sender].startMonth); i < _locks[msg.sender].endMonth; i++) {
             lockedPerMonth[i] -= amount;
         }
 
         totalLocked -= amount;
 
-        locks[msg.sender].amount -= amount;
+        _locks[msg.sender].amount -= amount;
 
-        if (locks[msg.sender].amount == 0) {
-            delete locks[msg.sender];
+        if (_locks[msg.sender].amount == 0) {
+            delete _locks[msg.sender];
         }
 
         uint256 penaltyAmount = (amount * penalty) / PRECISION;
@@ -185,7 +180,7 @@ contract Locking is Ownable, ReentrancyGuard {
         return _totalBoosted / PRECISION;
     }
 
-    function totalBoostedAt(uint256 month) private view returns (uint256) {
+    function totalBoostedAt(uint256 month) public view returns (uint256) {
         if (month < _currentMonthIndexStored) {
             return totalBoostHistory[month];
         }
@@ -198,15 +193,6 @@ contract Locking is Ownable, ReentrancyGuard {
         }
 
         return _totalBoosted / PRECISION;
-    }
-
-    function claim(address user, address rewardToken) external {
-        // checkpoint(); // TODO - how do we trigger this if rewards is separated? on the other hand, if locks/withdrawals already checkpoint,
-        // is it necessary to checkpoint here? at the very least we don't have any test failing as a result of commenting this out.
-        uint256 _pendingRewards = pendingRewards(user, rewardToken);
-        claimedRewards[user][rewardToken] += _pendingRewards;
-        rewardBalances[rewardToken] -= _pendingRewards;
-        IERC20(rewardToken).safeTransfer(user, _pendingRewards);
     }
 
     /*
@@ -247,38 +233,9 @@ contract Locking is Ownable, ReentrancyGuard {
         _currentMonthIndexStored = currentMonthIndex();
     }
 
-    function pendingRewards(address target, address _token) public view returns (uint256) {
-        Lock memory targetLock = locks[target];
-
-        uint256 monthFrom = targetLock.startMonth;
-        uint256 monthTo = Math.min(targetLock.endMonth, currentMonthIndex());
-
-        uint256 _pendingRewards = 0;
-
-        for (uint256 i = monthFrom; i < monthTo; i++) {
-            uint256 monthsLeft = targetLock.endMonth - i;
-            uint256 targetBoost = (targetLock.amount * monthToBoost[monthsLeft - 1]) / PRECISION;
-            _pendingRewards += (rewards[_token][i] * targetBoost) / totalBoostedAt(i);
-        }
-
-        return _pendingRewards - claimedRewards[target][_token];
-    }
-
     /**************************************
      * Admin functions
      **************************************/
-
-    function addReward(address _token, uint256 offset, uint256 months, uint256 amountPerMonth) external onlyOwner {
-        IERC20(_token).safeTransferFrom(msg.sender, address(this), amountPerMonth * months);
-
-        uint256 rewardsStartMonth = currentMonthIndex() + offset;
-
-        for (uint256 i = rewardsStartMonth; i < rewardsStartMonth + months; i++) {
-            rewards[_token][i] += amountPerMonth;
-        }
-
-        rewardBalances[_token] += amountPerMonth * months;
-    }
 
     function renounceOwnership() public view override onlyOwner {
         revert();
@@ -288,24 +245,15 @@ contract Locking is Ownable, ReentrancyGuard {
         // if(startMonth >= endMonth) revert InvalidArguments(startMonth);
         require(endMonth < currentMonthIndex(), "Locking:recover:endMonth");
         // Return any balance of the token that doesn't belong to the rewards program
-        uint256 tokenBalanceToRecover = IERC20(tokenAddress).balanceOf(address(this)) - rewardBalances[tokenAddress];
+        uint256 tokenBalanceToRecover = IERC20(tokenAddress).balanceOf(address(this));
 
         // in case of XCTD, we also need to retain the total locked amount in the contract
         if (tokenAddress == address(xctd)) {
             tokenBalanceToRecover -= totalLocked;
         }
 
-        // Recover reward for any past months that had 0 locked amount
-        for (uint256 i = startMonth; i < endMonth; i++) {
-            if (totalBoostedAt(i) == 0) {
-                tokenBalanceToRecover += rewards[tokenAddress][i];
-                rewardBalances[tokenAddress] -= rewards[tokenAddress][i];
-                rewards[tokenAddress][i] = 0;
-            }
-        }
-
         // Shouldn't happen
-        // tokenBalanceToRecover = Math.min(tokenBalanceToRecover, IERC20(tokenAddress).balanceOf(address(this)));
+        tokenBalanceToRecover = Math.min(tokenBalanceToRecover, IERC20(tokenAddress).balanceOf(address(this)));
 
         IERC20(tokenAddress).safeTransfer(owner(), tokenBalanceToRecover);
         // in case of ETH, transfer the balance as well
@@ -317,5 +265,9 @@ contract Locking is Ownable, ReentrancyGuard {
         for (uint256 i = 0; i < _monthToBoost.length; i++) {
             monthToBoost[i] = _monthToBoost[i];
         }
+    }
+
+    function locks(address _target) public view returns (Lock memory) {
+        return _locks[_target];
     }
 }

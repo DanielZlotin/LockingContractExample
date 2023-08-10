@@ -1,7 +1,7 @@
 import { Token, account, bn18, erc20, BlockInfo, Receipt } from "@defi.org/web3-candies";
 import { deployArtifact, mineBlock, tag, useChaiBigNumber } from "@defi.org/web3-candies/dist/hardhat";
 import { expect } from "chai";
-import type { Locking } from "../typechain-hardhat/contracts";
+import type { Locking, Rewards } from "../typechain-hardhat/contracts";
 import type { MockERC20 } from "../typechain-hardhat/contracts/test";
 import BN from "bignumber.js";
 
@@ -16,6 +16,7 @@ export let feeReceiver2: string;
 export let xctd: MockERC20 & Token;
 export let rewardToken: MockERC20 & Token;
 export let locking: Locking;
+export let rewards: Rewards;
 
 const DAY = 60 * 60 * 24;
 const MONTH = DAY * 30;
@@ -37,6 +38,7 @@ export async function withFixture() {
   xctd = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "XCTD"])).options.address);
   rewardToken = erc20("MockERC20", (await deployArtifact<MockERC20>("MockERC20", { from: deployer }, [bn18(1e9), "RewardToken"])).options.address);
   locking = await deployArtifact<Locking>("Locking", { from: deployer }, [xctd.options.address, 9000, feeReceiver1, feeReceiver2]);
+  rewards = await deployArtifact<Rewards>("Rewards", { from: deployer }, [locking.options.address]);
 
   expect(await locking.methods.xctd().call()).eq(xctd.options.address);
 
