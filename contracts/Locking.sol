@@ -138,6 +138,16 @@ contract Locking is Ownable, ReentrancyGuard {
             return;
         }
 
+        // we were missing adjustments of the total boosts in the future in case there has been an early withdrawal.
+
+        // this means that, for example, if:
+
+        // at month 13, you lock for 24 months to get a 45x boost
+        // at month 14, you withdraw early.
+
+        // we remove your position from current to future months, now it seems as if you were locked from months [13-14] only and is eligible for a 1x boost for these months instead.
+
+        // this isn't a complete solution yet
         for (uint256 i = Math.max(currentMonthIndex(), locks[msg.sender].startMonth); i < locks[msg.sender].endMonth; i++) {
             lockedPerMonth[i] -= amount;
         }
